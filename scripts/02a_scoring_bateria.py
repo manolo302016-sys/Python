@@ -1,574 +1,680 @@
 """
-02a_scoring_bateria.py — Implementa V1-Pasos 1 a 8
-Pasos: V1-Paso1 Codificación | V1-Paso2 Inversión Nivel 1 | V1-Pasos 3-8 Agrupaciones
-Input:  data/processed/fact_respuestas_clean.parquet
+02a_scoring_bateria.py
+======================
+Pasos 1-8 del pipeline V1 — Codificación y agrupaciones.
+
+PASO 1  Codificar id_respuesta (texto) → valor_numerico (float)
+PASO 2  Invertir ítems (Nivel 1, R3) — pendiente de lista de ítems
+PASO 3  Etiquetar instrumento, dimensión, dominio, factor desde dim_pregunta
+        (aplica para intraA, intraB, extra, estrés, afrontamiento, capitalpsic)
+Pasos 4-8 se resuelven en el mismo paso 3 vía JOIN con dim_pregunta.
+
 Output: data/processed/fact_scores_brutos.parquet
-Reglas: R1 PK triple | R2 Baremos A/B separados | R5 5 niveles normativos
-Fuente: Visualizador 1, Pasos 1-8 | Res. 2764/2022 MinTrabajo Colombia
+
+Reglas aplicadas:
+  R1  — PK: cedula + forma_intra + id_pregunta
+  R3  — Inversión nivel 1 (solo para ítems con es_item_invertido=True)
+  R13 — Output en Parquet
+  R14 — Función validar_scores_brutos()
+  R15 — fact_respuestas_clean es inmutable
 """
 
 import logging
 import sys
 from pathlib import Path
-from typing import Tuple
+
 import numpy as np
 import pandas as pd
 import yaml
 
+# ── Rutas ──────────────────────────────────────────────────────────────────
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = ROOT / "config" / "config.yaml"
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
-log = logging.getLogger("02a_scoring_bateria")
+log = logging.getLogger(__name__)
 
 
-def cargar_config(config_path: str = "config/config.yaml") -> dict:
-    """Carga config.yaml. Nunca hardcodear rutas (Regla R3)."""
-    with open(config_path, "r", encoding="utf-8") as f:
+# ══════════════════════════════════════════════════════════════════════════════
+# PASO 1 — Tablas de codificación texto → número
+# Fuente: Documento marco, sección "Pasos para la creación de los dashboards"
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Escala Likert estándar 0-4 (intralaboral A/B + extralaboral)
+LIKERT_0_4: dict[str, float] = {
+    "siempre":       4.0,
+    "casi siempre":  3.0,
+    "algunas veces": 2.0,
+    "casi nunca":    1.0,
+    "nunca":         0.0,
+}
+
+# Escala dicotómica (ítems 106 y 116 de intraA; ítem 89 de intraB)
+DICO: dict[str, float] = {
+    "si":  1.0,
+    "no":  0.0,
+    "sí":  1.0,   # variante con tilde
+}
+
+# Estrés — Grupo 1: ítems 1,2,3,9,13,14,15,23,24  → pesos 9/6/3/0
+ESTRES_G1_ITEMS = {1, 2, 3, 9, 13, 14, 15, 23, 24}
+ESTRES_G1: dict[str, float] = {
+    "siempre":      9.0,
+    "casi siempre": 6.0,
+    "a veces":      3.0,
+    "nunca":        0.0,
+}
+
+# Estrés — Grupo 2: ítems 4,5,6,10,11,16,17,18,19,25,26,27,28  → pesos 6/4/2/0
+ESTRES_G2_ITEMS = {4, 5, 6, 10, 11, 16, 17, 18, 19, 25, 26, 27, 28}
+ESTRES_G2: dict[str, float] = {
+    "siempre":      6.0,
+    "casi siempre": 4.0,
+    "a veces":      2.0,
+    "nunca":        0.0,
+}
+
+# Estrés — Grupo 3: ítems 7,8,12,20,21,22,29,30,31  → pesos 3/2/1/0
+ESTRES_G3_ITEMS = {7, 8, 12, 20, 21, 22, 29, 30, 31}
+ESTRES_G3: dict[str, float] = {
+    "siempre":      3.0,
+    "casi siempre": 2.0,
+    "a veces":      1.0,
+    "nunca":        0.0,
+}
+
+# Afrontamiento: ítems 1-12  → escala 0 / 0.5 / 0.7 / 1.0
+AFRONTAMIENTO: dict[str, float] = {
+    "nunca hago eso":          0.0,
+    "a veces hago eso":        0.5,
+    "frecuentemente hago eso": 0.7,
+    "siempre hago eso":        1.0,
+}
+
+# Capital psicológico: ítems 1-12  → escala 0 / 0.5 / 0.7 / 1.0
+CAPITAL_PSIC: dict[str, float] = {
+    "totalmente en desacuerdo": 0.0,
+    "en desacuerdo":            0.5,
+    "de acuerdo":               0.7,
+    "totalmente de acuerdo":    1.0,
+}
+
+# Ítems dicotómicos dentro de intralaboral (números de ítem, no id_pregunta completo)
+DICO_INTRA_A = {106, 116}
+DICO_INTRA_B = {89}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Funciones auxiliares
+# ══════════════════════════════════════════════════════════════════════════════
+
+def parsear_id_pregunta(id_pregunta: str) -> tuple[int, str]:
+    """
+    Extrae (num_item, sufijo_instrumento) de id_pregunta.
+
+    Ejemplos:
+      "1_intra"        → (1, "intra")
+      "106_intra"      → (106, "intra")
+      "1_extra"        → (1, "extra")
+      "1_estres"       → (1, "estres")
+      "1_afrontamiento"→ (1, "afrontamiento")
+      "1_capitalpsic"  → (1, "capitalpsic")
+    """
+    partes = str(id_pregunta).split("_", 1)
+    if len(partes) != 2:
+        raise ValueError(f"id_pregunta con formato inesperado: '{id_pregunta}'")
+    num = int(partes[0])
+    sufijo = partes[1].lower().strip()
+    return num, sufijo
+
+
+def codificar_respuesta(id_pregunta: str, forma_intra: str, id_respuesta: str) -> float:
+    """
+    PASO 1 — Codifica el texto de respuesta a valor numérico.
+
+    Parámetros
+    ----------
+    id_pregunta  : str   — e.g. "1_intra", "1_extra", "1_estres"
+    forma_intra  : str   — 'A' o 'B'
+    id_respuesta : str   — texto libre: "Siempre", "si", "A veces", etc.
+
+    Retorna
+    -------
+    float  — valor codificado, o np.nan si no se puede mapear
+    """
+    try:
+        num_item, sufijo = parsear_id_pregunta(id_pregunta)
+    except ValueError:
+        return np.nan
+
+    resp = str(id_respuesta).strip().lower()
+
+    # ── Intralaboral A o B ──────────────────────────────────────────────────
+    if sufijo == "intra":
+        es_dico = (
+            (forma_intra == "A" and num_item in DICO_INTRA_A) or
+            (forma_intra == "B" and num_item in DICO_INTRA_B)
+        )
+        if es_dico:
+            val = DICO.get(resp)
+        else:
+            val = LIKERT_0_4.get(resp)
+
+    # ── Extralaboral (aplica A y B) ─────────────────────────────────────────
+    elif sufijo == "extra":
+        val = LIKERT_0_4.get(resp)
+
+    # ── Estrés — 3 grupos de pesos (aplica A y B) ──────────────────────────
+    elif sufijo == "estres":
+        if num_item in ESTRES_G1_ITEMS:
+            val = ESTRES_G1.get(resp)
+        elif num_item in ESTRES_G2_ITEMS:
+            val = ESTRES_G2.get(resp)
+        elif num_item in ESTRES_G3_ITEMS:
+            val = ESTRES_G3.get(resp)
+        else:
+            log.warning("Ítem estrés fuera de rango: num=%d", num_item)
+            val = np.nan
+
+    # ── Afrontamiento (aplica A y B) ────────────────────────────────────────
+    elif sufijo == "afrontamiento":
+        val = AFRONTAMIENTO.get(resp)
+
+    # ── Capital psicológico (aplica A y B) ──────────────────────────────────
+    elif sufijo == "capitalpsicologico":
+        val = CAPITAL_PSIC.get(resp)
+
+    else:
+        log.warning("Sufijo de instrumento desconocido: '%s' en id_pregunta='%s'", sufijo, id_pregunta)
+        val = np.nan
+
+    if val is None:
+        log.debug(
+            "Respuesta no mapeada | id_pregunta=%s forma=%s respuesta='%s'",
+            id_pregunta, forma_intra, id_respuesta,
+        )
+        return np.nan
+
+    return float(val)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PASO 2 — Inversión de ítems Nivel 1 (R3)
+# Fuente: Documento marco, Paso 2 + pipeline.md V1-Paso2
+#
+# Regla: Siempre=4→0 | Casi siempre=3→1 | Algunas veces=2→2 | Casi nunca=1→3 | Nunca=0→4
+# Fórmula Likert: valor_invertido = 4 - valor_numerico
+#
+# Afrontamiento ítems 5-8: inversión propia con escala distinta (no 4-x)
+# Estrés y CapitalPsicológico: NO tienen ítems invertidos en Nivel 1
+# ══════════════════════════════════════════════════════════════════════════════
+
+# IntraA — 73 ítems invertidos
+# Fuente: Documento marco Paso 2
+INVERTIDOS_INTRA_A: set[int] = {
+    4, 5, 6, 9, 12, 14, 32, 34,
+    39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+    53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
+    63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75,
+    76, 77, 78, 79,
+    81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94,
+    95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105,
+}  # Total: 73 ítems ✓
+
+# IntraB — 68 ítems invertidos
+INVERTIDOS_INTRA_B: set[int] = {
+    4, 5, 6, 9, 12, 14, 22, 24,
+    29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+    39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52,
+    53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65,
+    67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+    81, 82, 83, 84, 85, 86, 87, 88,
+    98,
+}  # Total: 68 ítems ✓
+
+# Extralaboral — 23 ítems invertidos (aplica a forma A y B)
+INVERTIDOS_EXTRA: set[int] = {
+    1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 25, 27, 29,
+}  # Total: 23 ítems ✓
+
+# Afrontamiento ítems 5,6,7,8 — inversión con escala propia (no 4-x)
+# Escala invertida: nunca=1, a_veces=0.7, frecuentemente=0.5, siempre=0
+INVERTIDOS_AFRONTAMIENTO: set[int] = {5, 6, 7, 8}
+
+AFRONTAMIENTO_INVERTIDO: dict[str, float] = {
+    "nunca hago eso":          1.0,
+    "a veces hago eso":        0.7,
+    "frecuentemente hago eso": 0.5,
+    "siempre hago eso":        0.0,
+}
+
+
+def es_item_invertido(num_item: int, sufijo: str, forma_intra: str) -> bool:
+    """Determina si un ítem debe invertirse en Nivel 1 (R3)."""
+    if sufijo == "intra":
+        if forma_intra == "A":
+            return num_item in INVERTIDOS_INTRA_A
+        elif forma_intra == "B":
+            return num_item in INVERTIDOS_INTRA_B
+    elif sufijo == "extra":
+        return num_item in INVERTIDOS_EXTRA
+    elif sufijo == "afrontamiento":
+        return num_item in INVERTIDOS_AFRONTAMIENTO
+    # estrés y capitalpsic: sin inversión Nivel 1
+    return False
+
+
+def invertir_valor(
+    valor_numerico: float,
+    num_item: int,
+    sufijo: str,
+    id_respuesta_original: str,
+) -> float:
+    """
+    PASO 2 — Aplica inversión Nivel 1 según instrumento e ítem.
+
+    Likert 0-4 (intra, extra):  valor_invertido = 4 - valor_numerico
+    Afrontamiento 5-8:          escala invertida propia (0→1, 0.5→0.7, 0.7→0.5, 1→0)
+    """
+    if sufijo == "afrontamiento" and num_item in INVERTIDOS_AFRONTAMIENTO:
+        resp = str(id_respuesta_original).strip().lower()
+        return AFRONTAMIENTO_INVERTIDO.get(resp, valor_numerico)
+    else:
+        # Likert 0-4 e Extralaboral
+        return 4.0 - valor_numerico
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Ejecución principal
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cargar_config() -> dict:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-# ===========================================================================
-# V1-PASO 1: TABLAS DE CODIFICACIÓN TEXTO → NÚMERO
-# Fuente: Visualizador 1, Paso 1 (filas 8-65)
-# ===========================================================================
-
-LIKERT_STD = {"siempre":4, "casi siempre":3, "algunas veces":2, "casi nunca":1, "nunca":0}
-DICOTOMICA  = {"si":1, "sí":1, "no":0}
-
-# Estrés: 3 subgrupos con escalas diferenciadas
-ESTRES_GRUPO_A = {
-    "items":  frozenset({1,2,3,9,13,14,15,23,24}),
-    "escala": {"siempre":9, "casi siempre":6, "a veces":3, "nunca":0},
-}
-ESTRES_GRUPO_B = {
-    "items":  frozenset({4,5,6,10,11,16,17,18,19,25,26,27,28}),
-    "escala": {"siempre":6, "casi siempre":4, "a veces":2, "nunca":0},
-}
-ESTRES_GRUPO_C = {
-    "items":  frozenset({7,8,12,20,21,22,29,30,31}),
-    "escala": {"siempre":3, "casi siempre":2, "a veces":1, "nunca":0},
-}
-
-# Afrontamiento: ítems 1-4 dirección normal, ítems 5-8 ya invertidos desde Paso 1
-AFRONTAMIENTO_NORMAL = {
-    "nunca hago eso":0, "a veces hago eso":0.5,
-    "frecuentemente hago eso":0.7, "siempre hago eso":1,
-}
-AFRONTAMIENTO_INVERTIDO = {
-    "nunca hago eso":1, "a veces hago eso":0.7,
-    "frecuentemente hago eso":0.5, "siempre hago eso":0,
-}
-
-CAP_PSICOLOGICO = {
-    "totalmente en desacuerdo":0, "en desacuerdo":0.5,
-    "de acuerdo":0.7, "totalmente de acuerdo":1,
-}
-
-
-def codificar_valor(instrumento: str, id_preg: int, respuesta: str) -> float:
+def aplicar_paso1_vectorizado(df: pd.DataFrame) -> pd.Series:
     """
-    V1-Paso1: Convierte respuesta en texto a valor numérico.
-    Aplica escala correcta según instrumento e id_pregunta.
-    Returns float o np.nan si no se puede codificar.
+    Aplica codificar_respuesta() a todo el DataFrame de forma vectorizada.
+    Retorna Serie con el valor_numerico por fila.
     """
-    instr = instrumento.lower().strip()
-    resp  = respuesta.lower().strip()
-
-    if instr in ("estres", "estrés"):
-        for grp in (ESTRES_GRUPO_A, ESTRES_GRUPO_B, ESTRES_GRUPO_C):
-            if id_preg in grp["items"]:
-                return float(grp["escala"].get(resp, np.nan))
-        return np.nan
-
-    if instr == "afrontamiento":
-        tabla = AFRONTAMIENTO_INVERTIDO if id_preg in {5,6,7,8} else AFRONTAMIENTO_NORMAL
-        return float(tabla.get(resp, np.nan))
-
-    if instr == "capital_psicologico":
-        return float(CAP_PSICOLOGICO.get(resp, np.nan))
-
-    if instr in ("intralaboral_a", "intralaboral_b"):
-        dicotomica = (
-            (instr == "intralaboral_a" and id_preg in {106, 116}) or
-            (instr == "intralaboral_b" and id_preg == 89)
-        )
-        return float(DICOTOMICA.get(resp, np.nan) if dicotomica else LIKERT_STD.get(resp, np.nan))
-
-    if instr == "extralaboral":
-        return float(LIKERT_STD.get(resp, np.nan))
-
-    log.warning("Instrumento no reconocido: %r | pregunta %d", instrumento, id_preg)
-    return np.nan
-
-
-# ===========================================================================
-# V1-PASO 2: INVERSIÓN DE ÍTEMS NIVEL 1
-# Fuente: Visualizador 1, Paso 2 (filas 71-90)
-# Regla: valor_invertido = 4 - valor_numerico (escala 0-4)
-# NOTA: afrontamiento 5-8 ya está invertido en Paso 1
-# ===========================================================================
-
-# IntraA — 73 ítems (V1 Paso 2, lista exacta del visualizador)
-ITEMS_INVERTIDOS_INTRA_A = frozenset([
-    4,5,6,9,12,14,32,34,39,40,41,42,43,44,45,46,47,48,49,50,
-    51,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,
-    71,72,73,74,75,76,77,78,79,81,82,83,84,85,86,87,88,89,90,
-    91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,
-])
-
-# IntraB — 68 ítems (V1 Paso 2, lista exacta del visualizador)
-ITEMS_INVERTIDOS_INTRA_B = frozenset([
-    4,5,6,9,12,14,22,24,29,30,31,32,33,34,35,36,37,38,39,40,
-    41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,
-    60,61,62,63,64,65,67,68,69,70,71,72,73,74,75,76,77,78,79,
-    80,81,82,83,84,85,86,87,88,98,
-])
-
-# Extralaboral — 23 ítems (V1 Paso 2)
-ITEMS_INVERTIDOS_EXTRA = frozenset([
-    1,4,5,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,25,27,29,
-])
-
-
-def invertir_nivel1(instrumento: str, id_preg: int, valor: float) -> float:
-    """
-    V1-Paso2: Inversión Nivel 1 — 4 - valor para ítems en listas.
-    Solo IntraA, IntraB y Extralaboral (escala 0-4).
-    Estrés, afrontamiento y capital psicológico no se invierten aquí.
-    """
-    if pd.isna(valor):
-        return np.nan
-    instr = instrumento.lower().strip()
-    if instr == "intralaboral_a" and id_preg in ITEMS_INVERTIDOS_INTRA_A:
-        return 4.0 - float(valor)
-    if instr == "intralaboral_b" and id_preg in ITEMS_INVERTIDOS_INTRA_B:
-        return 4.0 - float(valor)
-    if instr == "extralaboral" and id_preg in ITEMS_INVERTIDOS_EXTRA:
-        return 4.0 - float(valor)
-    return float(valor)
-
-
-# ===========================================================================
-# V1-PASOS 3-8: TABLAS DE AGRUPACIÓN ÍTEM → DIMENSIÓN / DOMINIO / FACTOR
-# ===========================================================================
-
-# --- V1-Paso3: IntraA (fuente: Visualizador 1 Paso 3, filas 96-115)
-AGRUPACION_INTRA_A = [
-    {"factor":"Intralaboral_A","dominio":"Liderazgo y relaciones sociales en el trabajo",
-     "dimension":"Características del liderazgo",
-     "items":[63,64,65,66,67,68,69,70,71,72,73,74,75]},
-    {"factor":"Intralaboral_A","dominio":"Liderazgo y relaciones sociales en el trabajo",
-     "dimension":"Relaciones sociales en el trabajo",
-     "items":[76,77,78,79,80,81,82,83,84,85,86,87,88,89]},
-    {"factor":"Intralaboral_A","dominio":"Liderazgo y relaciones sociales en el trabajo",
-     "dimension":"Retroalimentación del desempeño",
-     "items":[90,91,92,93,94]},
-    {"factor":"Intralaboral_A","dominio":"Liderazgo y relaciones sociales en el trabajo",
-     "dimension":"Relación con los colaboradores",
-     "items":[117,118,119,120,121,122,123,124,125]},
-    {"factor":"Intralaboral_A","dominio":"Control sobre el trabajo",
-     "dimension":"Claridad de rol","items":[53,54,55,56,57,58,59]},
-    {"factor":"Intralaboral_A","dominio":"Control sobre el trabajo",
-     "dimension":"Capacitación","items":[60,61,62]},
-    {"factor":"Intralaboral_A","dominio":"Control sobre el trabajo",
-     "dimension":"Participación y manejo del cambio","items":[48,49,50,51]},
-    {"factor":"Intralaboral_A","dominio":"Control sobre el trabajo",
-     "dimension":"Oportunidades para el uso y desarrollo de habilidades y conocimientos",
-     "items":[39,40,41,42]},
-    {"factor":"Intralaboral_A","dominio":"Control sobre el trabajo",
-     "dimension":"Control y autonomía sobre el trabajo","items":[44,45,46]},
-    {"factor":"Intralaboral_A","dominio":"Demandas del trabajo",
-     "dimension":"Demandas ambientales y de esfuerzo físico",
-     "items":[1,2,3,4,5,6,7,8,9,10,11,12]},
-    {"factor":"Intralaboral_A","dominio":"Demandas del trabajo",
-     "dimension":"Demandas emocionales","items":[107,108,109,110,111,112,113,114,115]},
-    {"factor":"Intralaboral_A","dominio":"Demandas del trabajo",
-     "dimension":"Demandas cuantitativas","items":[13,14,15,32,43,47]},
-    {"factor":"Intralaboral_A","dominio":"Demandas del trabajo",
-     "dimension":"Influencia del trabajo sobre el entorno extralaboral","items":[35,36,37,38]},
-    {"factor":"Intralaboral_A","dominio":"Demandas del trabajo",
-     "dimension":"Exigencias de responsabilidad del cargo","items":[19,22,23,24,25,26]},
-    {"factor":"Intralaboral_A","dominio":"Demandas del trabajo",
-     "dimension":"Demandas de carga mental","items":[16,17,18,20,21]},
-    {"factor":"Intralaboral_A","dominio":"Demandas del trabajo",
-     "dimension":"Consistencia del rol","items":[27,28,29,30,52]},
-    {"factor":"Intralaboral_A","dominio":"Demandas del trabajo",
-     "dimension":"Demandas de la jornada de trabajo","items":[31,33,34]},
-    {"factor":"Intralaboral_A","dominio":"Recompensas",
-     "dimension":"Recompensas derivadas de la pertenencia a la organización y del trabajo",
-     "items":[95,102,103,104,105]},
-    {"factor":"Intralaboral_A","dominio":"Recompensas",
-     "dimension":"Reconocimiento y compensación","items":[96,97,98,99,100,101]},
-]
-
-# --- V1-Paso4: IntraB (fuente: Visualizador 1 Paso 4, filas 118-136)
-AGRUPACION_INTRA_B = [
-    {"factor":"Intralaboral_B","dominio":"Liderazgo y relaciones sociales en el trabajo",
-     "dimension":"Características del liderazgo",
-     "items":[49,50,51,52,53,54,55,56,57,58,59,60,61]},
-    {"factor":"Intralaboral_B","dominio":"Liderazgo y relaciones sociales en el trabajo",
-     "dimension":"Relaciones sociales en el trabajo",
-     "items":[62,63,64,65,66,67,68,69,70,71,72,73]},
-    {"factor":"Intralaboral_B","dominio":"Liderazgo y relaciones sociales en el trabajo",
-     "dimension":"Retroalimentación del desempeño","items":[74,75,76,77,78]},
-    # "Relación con los colaboradores" NO APLICA para forma B
-    {"factor":"Intralaboral_B","dominio":"Control sobre el trabajo",
-     "dimension":"Claridad de rol","items":[41,42,43,44,45]},
-    {"factor":"Intralaboral_B","dominio":"Control sobre el trabajo",
-     "dimension":"Capacitación","items":[46,47,48]},
-    {"factor":"Intralaboral_B","dominio":"Control sobre el trabajo",
-     "dimension":"Participación y manejo del cambio","items":[38,39,40]},
-    {"factor":"Intralaboral_B","dominio":"Control sobre el trabajo",
-     "dimension":"Oportunidades para el uso y desarrollo de habilidades y conocimientos",
-     "items":[29,30,31,32]},
-    {"factor":"Intralaboral_B","dominio":"Control sobre el trabajo",
-     "dimension":"Control y autonomía sobre el trabajo","items":[34,35,36]},
-    {"factor":"Intralaboral_B","dominio":"Demandas del trabajo",
-     "dimension":"Demandas ambientales y de esfuerzo físico",
-     "items":[1,2,3,4,5,6,7,8,9,10,11,12]},
-    {"factor":"Intralaboral_B","dominio":"Demandas del trabajo",
-     "dimension":"Demandas emocionales","items":[90,91,92,93,94,95,96,97,98]},
-    {"factor":"Intralaboral_B","dominio":"Demandas del trabajo",
-     "dimension":"Demandas cuantitativas","items":[13,14,15]},
-    {"factor":"Intralaboral_B","dominio":"Demandas del trabajo",
-     "dimension":"Influencia del trabajo sobre el entorno extralaboral","items":[25,26,27,28]},
-    # "Exigencias de responsabilidad del cargo" NO EVALÚA en forma B
-    # "Consistencia del rol" NO EVALÚA en forma B
-    {"factor":"Intralaboral_B","dominio":"Demandas del trabajo",
-     "dimension":"Demandas de carga mental","items":[16,17,18,19,20]},
-    {"factor":"Intralaboral_B","dominio":"Demandas del trabajo",
-     "dimension":"Demandas de la jornada de trabajo","items":[21,22,23,24,33,37]},
-    {"factor":"Intralaboral_B","dominio":"Recompensas",
-     "dimension":"Recompensas derivadas de la pertenencia a la organización y del trabajo",
-     "items":[85,86,87,88]},
-    {"factor":"Intralaboral_B","dominio":"Recompensas",
-     "dimension":"Reconocimiento y compensación","items":[79,80,81,82,83,84]},
-]
-
-# --- V1-Paso5: Extralaboral (fuente: Visualizador 1 Paso 5)
-AGRUPACION_EXTRA = [
-    {"factor":"Extralaboral","dominio":"Extralaboral",
-     "dimension":"Balance entre la vida laboral y familiar","items":[14,15,16,17]},
-    {"factor":"Extralaboral","dominio":"Extralaboral",
-     "dimension":"Relaciones familiares","items":[22,25,27]},
-    {"factor":"Extralaboral","dominio":"Extralaboral",
-     "dimension":"Comunicación y relaciones interpersonales","items":[18,19,20,21,23]},
-    {"factor":"Extralaboral","dominio":"Extralaboral",
-     "dimension":"Situación económica del grupo familiar","items":[29,30,31]},
-    {"factor":"Extralaboral","dominio":"Extralaboral",
-     "dimension":"Características de la vivienda y de su entorno","items":[5,6,7,8,9,10,11,12,13]},
-    {"factor":"Extralaboral","dominio":"Extralaboral",
-     "dimension":"Influencia del entorno extralaboral sobre el trabajo","items":[24,26,28]},
-    {"factor":"Extralaboral","dominio":"Extralaboral",
-     "dimension":"Desplazamiento vivienda trabajo vivienda","items":[1,2,3,4]},
-]
-
-# --- V1-Paso6: Estrés (fuente: Visualizador 1 Paso 6)
-AGRUPACION_ESTRES = [
-    {"factor":"Estres","dominio":"Estres","dimension":"Estres",
-     "items":list(range(1,32))},  # ítems 1 al 31
-]
-
-# --- V1-Paso7: Afrontamiento (fuente: Visualizador 1 Paso 7)
-AGRUPACION_AFRONTAMIENTO = [
-    {"factor":"Individual","dominio":"Afrontamiento",
-     "dimension":"afrontamiento_activo_planificacion","items":[1,2,3,4]},
-    {"factor":"Individual","dominio":"Afrontamiento",
-     "dimension":"afrontamiento_pasivo_negacion","items":[5,6,7,8]},
-    {"factor":"Individual","dominio":"Afrontamiento",
-     "dimension":"afrontamiento_activo_busquedasoporte","items":[9,10,11,12]},
-]
-
-# --- V1-Paso8: Capital Psicológico (fuente: Visualizador 1 Paso 8)
-AGRUPACION_CAP_PSICOLOGICO = [
-    {"factor":"Individual","dominio":"Capital_Psicologico",
-     "dimension":"Optimismo","items":[1,2,3]},
-    {"factor":"Individual","dominio":"Capital_Psicologico",
-     "dimension":"Esperanza","items":[4,5,6]},
-    {"factor":"Individual","dominio":"Capital_Psicologico",
-     "dimension":"Resiliencia","items":[7,8,9]},
-    {"factor":"Individual","dominio":"Capital_Psicologico",
-     "dimension":"Autoeficacia","items":[9,10,11,12]},
-]
-
-
-# ===========================================================================
-# FUNCIONES DE PROCESAMIENTO PRINCIPAL
-# ===========================================================================
-
-# Mapa instrumento → tabla de agrupación
-AGRUPACIONES_POR_INSTRUMENTO = {
-    "intralaboral_a":     AGRUPACION_INTRA_A,
-    "intralaboral_b":     AGRUPACION_INTRA_B,
-    "extralaboral":       AGRUPACION_EXTRA,
-    "estres":             AGRUPACION_ESTRES,
-    "estrés":             AGRUPACION_ESTRES,
-    "afrontamiento":      AGRUPACION_AFRONTAMIENTO,
-    "capital_psicologico":AGRUPACION_CAP_PSICOLOGICO,
-}
-
-
-def construir_lookup_agrupacion() -> pd.DataFrame:
-    """
-    Construye tabla lookup: (instrumento, id_pregunta) → (factor, dominio, dimension).
-    Usada para hacer JOIN con fact_scores_brutos.
-    """
-    registros = []
-    for instrumento, tabla in AGRUPACIONES_POR_INSTRUMENTO.items():
-        for grupo in tabla:
-            for item in grupo["items"]:
-                registros.append({
-                    "instrumento": instrumento,
-                    "id_pregunta": item,
-                    "factor":     grupo["factor"],
-                    "dominio":    grupo["dominio"],
-                    "dimension":  grupo["dimension"],
-                })
-    return pd.DataFrame(registros)
-
-
-def aplicar_codificacion(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    V1-Paso1: Aplica codificación texto → número a toda la tabla.
-    
-    Requiere columnas: instrumento, id_pregunta, id_respuesta_texto
-    Agrega columna: valor_numerico
-    """
-    log.info("V1-Paso1: Codificando %d respuestas...", len(df))
-    df = df.copy()
-    df["id_respuesta_texto"] = df["id_respuesta_texto"].astype(str).str.lower().str.strip()
-
-    df["valor_numerico"] = df.apply(
-        lambda r: codificar_valor(
-            str(r["instrumento"]),
-            int(r["id_pregunta"]),
-            str(r["id_respuesta_texto"])
+    return df.apply(
+        lambda row: codificar_respuesta(
+            row["id_pregunta"], row["forma_intra"], row["id_respuesta"]
         ),
-        axis=1
+        axis=1,
     )
 
-    nulos = df["valor_numerico"].isna().sum()
-    if nulos > 0:
-        log.warning("V1-Paso1: %d respuestas no pudieron codificarse (NaN)", nulos)
-    log.info("V1-Paso1: Codificación completada. NaN: %d / %d", nulos, len(df))
+
+def aplicar_paso2(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    PASO 2 — Inversión de ítems Nivel 1 (R3).
+
+    Usa los conjuntos hardcodeados INVERTIDOS_INTRA_A/B, INVERTIDOS_EXTRA,
+    INVERTIDOS_AFRONTAMIENTO — no depende de dim_pregunta.es_item_invertido.
+
+    Reglas:
+      IntraA (73 ítems) | IntraB (68 ítems) | Extra (23 ítems): valor_invertido = 4 - valor
+      Afrontamiento ítems 5-8: escala propia invertida
+      Estrés + CapitalPsic: sin inversión (valor_invertido = valor_numerico)
+    """
+    df = df.copy()
+    df["valor_invertido"] = df["valor_numerico"].copy()
+
+    # Calcular máscara de ítems a invertir usando es_item_invertido()
+    def _necesita_inversion(row) -> bool:
+        try:
+            num, sufijo = parsear_id_pregunta(row["id_pregunta"])
+        except ValueError:
+            return False
+        return es_item_invertido(num, sufijo, row["forma_intra"])
+
+    mask_invertir = df.apply(_necesita_inversion, axis=1)
+
+    # Aplicar invertir_valor() fila a fila donde corresponda
+    df.loc[mask_invertir, "valor_invertido"] = df.loc[mask_invertir].apply(
+        lambda row: invertir_valor(
+            row["valor_numerico"],
+            parsear_id_pregunta(row["id_pregunta"])[0],  # num_item
+            parsear_id_pregunta(row["id_pregunta"])[1],  # sufijo
+            row["id_respuesta"],
+        ),
+        axis=1,
+    )
+
+    invertidos = int(mask_invertir.sum())
+    log.info("Paso 2 — Ítems invertidos: %d de %d total", invertidos, len(df))
     return df
 
 
-def aplicar_inversion_nivel1(df: pd.DataFrame) -> pd.DataFrame:
+def aplicar_pasos3_a_8(df: pd.DataFrame, dim_pregunta: pd.DataFrame) -> pd.DataFrame:
     """
-    V1-Paso2: Aplica inversión Nivel 1 a todos los ítems correspondientes.
-    Regla: SIEMPRE antes de las agrupaciones.
-    
-    Agrega columna: valor_invertido
-    """
-    log.info("V1-Paso2: Aplicando inversión Nivel 1...")
-    df = df.copy()
-    df["valor_invertido"] = df.apply(
-        lambda r: invertir_nivel1(
-            str(r["instrumento"]),
-            int(r["id_pregunta"]),
-            r["valor_numerico"]
-        ),
-        axis=1
-    )
-    # Auditoría: contar ítems invertidos por instrumento
-    invertidos = df[df["valor_invertido"] != df["valor_numerico"]]
-    log.info("V1-Paso2: %d ítems invertidos (de %d total)", len(invertidos), len(df))
-    return df
+    PASOS 3-8 — Agrupaciones: asignar instrumento, dimensión, dominio, factor
+    desde dim_pregunta mediante JOIN en id_pregunta.
 
-
-def aplicar_agrupaciones(df: pd.DataFrame) -> pd.DataFrame:
+    Pasos cubiertos:
+      3 — Agrupación intralaboral_A: item → dimensión → dominio → factor
+      4 — Agrupación intralaboral_B: item → dimensión → dominio → factor
+      5 — Agrupación extralaboral: item → dimensión
+      6 — Agrupación estrés: item → factor/dimensión
+      7 — Agrupación afrontamiento: item → factor/dimensión
+      8 — Agrupación capitalpsicologico: item → factor/dimensión
     """
-    V1-Pasos 3-8: Agrega columnas factor, dominio, dimension mediante JOIN
-    con la tabla lookup de agrupaciones.
-    
-    Ítems dicotómicos (106, 116 IntraA; 89 IntraB) se incluyen SIN agrupación
-    (son preguntas especiales sin dimensión asignada en Res. 2764).
-    """
-    log.info("V1-Pasos 3-8: Aplicando agrupaciones ítem → dimensión...")
-    df = df.copy()
-    lookup = construir_lookup_agrupacion()
-    lookup["instrumento"] = lookup["instrumento"].str.lower().str.strip()
+    cols_dim = ["id_pregunta", "forma_intra", "instrumento", "dimension", "dominio", "factor"]
+    # Solo añadir columnas que no estén ya en df
+    cols_nuevas = [c for c in cols_dim if c not in df.columns]
 
-    df["instrumento_key"] = df["instrumento"].str.lower().str.strip()
-    df_merged = df.merge(
-        lookup,
-        left_on=["instrumento_key", "id_pregunta"],
-        right_on=["instrumento", "id_pregunta"],
+    if not cols_nuevas:
+        log.info("Pasos 3-8 — columnas de agrupación ya presentes, se omite JOIN")
+        return df
+
+    df = df.merge(
+        dim_pregunta[cols_dim].drop_duplicates(["id_pregunta", "forma_intra"]),
+        on=["id_pregunta", "forma_intra"],
         how="left",
-        suffixes=("", "_lookup")
     )
 
-    # Ítems sin agrupación (dicotómicos, ítems especiales)
-    sin_grupo = df_merged["factor"].isna()
-    if sin_grupo.sum() > 0:
-        log.warning(
-            "V1-Pasos3-8: %d ítems sin grupo asignado — revisar ítems: %s",
-            sin_grupo.sum(),
-            df_merged[sin_grupo]["id_pregunta"].unique().tolist()[:20]
-        )
+    sin_dimension = df["dimension"].isna().sum()
+    if sin_dimension > 0:
+        log.warning("Pasos 3-8 — %d ítems sin dimensión asignada (revisar dim_pregunta)", sin_dimension)
 
-    df_merged.drop(columns=["instrumento_key", "instrumento_lookup"], errors="ignore", inplace=True)
-    log.info("V1-Pasos 3-8: Agrupación completada. Filas resultado: %d", len(df_merged))
-    return df_merged
+    log.info("Pasos 3-8 — Instrumentos presentes: %s", df["instrumento"].unique().tolist())
+    return df
 
 
-# ===========================================================================
-# VALIDACIÓN DE INTEGRIDAD
-# ===========================================================================
-
-def validar_scores_brutos(df: pd.DataFrame) -> Tuple[bool, pd.DataFrame]:
+def validar_scores_brutos(df: pd.DataFrame) -> tuple[bool, pd.DataFrame]:
     """
-    Valida integridad de fact_scores_brutos.
-    Returns: (es_valido, df_errores)
+    R14 — Validación obligatoria de fact_scores_brutos.
+    Retorna (es_valido, reporte_errores).
     """
-    log.info("Validando fact_scores_brutos...")
     errores = []
 
-    # 1. PK sin duplicados (R1)
-    pk = ["cedula", "forma_intra", "id_pregunta"]
-    dupes = df[df.duplicated(subset=pk, keep=False)]
-    if len(dupes) > 0:
-        errores.append({
-            "check": "PK_duplicada",
-            "n": len(dupes),
-            "detalle": f"Primeras PKs duplicadas: {dupes[pk].head(3).to_dict(orient='records')}",
-        })
+    # PK sin duplicados (R1)
+    dup = df.duplicated(subset=["cedula", "forma_intra", "id_pregunta"]).sum()
+    if dup > 0:
+        errores.append({"check": "pk_duplicada", "n": int(dup)})
 
-    # 2. Valores numéricos en rango esperado
-    intra_mask = df["instrumento"].str.lower().str.startswith("intralaboral")
-    extra_mask = df["instrumento"].str.lower() == "extralaboral"
-    rango_mask = intra_mask | extra_mask
-    fuera_rango = df[rango_mask & ((df["valor_invertido"] < 0) | (df["valor_invertido"] > 4))]
-    if len(fuera_rango) > 0:
-        errores.append({
-            "check": "valor_fuera_rango_0_4",
-            "n": len(fuera_rango),
-            "detalle": f"Instrumentos afectados: {fuera_rango['instrumento'].unique().tolist()}",
-        })
+    # Sin nulos en columnas clave
+    for col in ["cedula", "forma_intra", "id_pregunta", "valor_numerico"]:
+        n = df[col].isna().sum()
+        if n > 0:
+            errores.append({"check": f"nulos_{col}", "n": int(n)})
 
-    # 3. Formas válidas (R2)
-    formas = df["forma_intra"].str.upper().unique().tolist()
-    formas_invalidas = [f for f in formas if f not in ("A", "B")]
-    if formas_invalidas:
-        errores.append({
-            "check": "forma_invalida",
-            "n": len(formas_invalidas),
-            "detalle": f"Formas no reconocidas: {formas_invalidas}",
-        })
+    # valor_invertido no debe tener nulos
+    n_inv_null = df["valor_invertido"].isna().sum()
+    if n_inv_null > 0:
+        errores.append({"check": "nulos_valor_invertido", "n": int(n_inv_null)})
 
-    # 4. Verificar que empresa ASIGNAR esté presente (R8)
-    if "empresa" in df.columns and "ASIGNAR" not in df["empresa"].values:
-        log.warning("ASIGNAR no encontrada — puede ser normal si no está en este corte")
+    # valor_numerico: verificar que no hay respuestas no mapeadas (NaN) excesivas
+    pct_nan = df["valor_numerico"].isna().mean() * 100
+    if pct_nan > 5.0:
+        errores.append({"check": "pct_nan_alto_valor_numerico", "n": round(pct_nan, 2)})
 
-    # 5. NaN en valor_invertido
-    nans = df["valor_invertido"].isna().sum()
-    if nans > 0:
-        errores.append({
-            "check": "valor_invertido_nan",
-            "n": nans,
-            "detalle": "Respuestas que no pudieron codificarse",
-        })
+    # Rango: intra y extra deben estar en [0, 4], estrés en [0, 9]
+    intra_extra = df[df["id_pregunta"].str.endswith(("_intra", "_extra"))]
+    fuera_rango = intra_extra[
+        (intra_extra["valor_invertido"] < 0) | (intra_extra["valor_invertido"] > 4)
+    ].shape[0]
+    if fuera_rango > 0:
+        errores.append({"check": "fuera_rango_likert_0_4", "n": fuera_rango})
 
-    df_errores = pd.DataFrame(errores)
-    es_valido = len(errores) == 0
-    if es_valido:
-        log.info("Validación EXITOSA — fact_scores_brutos integro")
-    else:
-        log.error("Validación FALLIDA — %d checks con errores", len(errores))
-        log.error(df_errores.to_string())
-    return es_valido, df_errores
+    reporte = pd.DataFrame(errores) if errores else pd.DataFrame(columns=["check", "n"])
+    return len(errores) == 0, reporte
 
 
-# ===========================================================================
-# PIPELINE PRINCIPAL
-# ===========================================================================
+# ══════════════════════════════════════════════════════════════════════════════
+# Construcción interna de dim_pregunta (no existe como hoja Excel)
+# ══════════════════════════════════════════════════════════════════════════════
 
-def main(config_path: str = "config/config.yaml") -> None:
+def _max_valor_item(id_pregunta: str, forma_intra: str) -> float:
+    """Retorna el máximo puntaje posible por ítem según instrumento y grupo."""
+    try:
+        num, sufijo = parsear_id_pregunta(id_pregunta)
+    except ValueError:
+        return 4.0
+    if sufijo == "intra":
+        es_dico = (
+            (forma_intra == "A" and num in DICO_INTRA_A) or
+            (forma_intra == "B" and num in DICO_INTRA_B)
+        )
+        return 1.0 if es_dico else 4.0
+    elif sufijo == "extra":
+        return 4.0
+    elif sufijo == "estres":
+        if num in ESTRES_G1_ITEMS:
+            return 9.0
+        elif num in ESTRES_G2_ITEMS:
+            return 6.0
+        elif num in ESTRES_G3_ITEMS:
+            return 3.0
+    elif sufijo in ("afrontamiento", "capitalpsicologico"):
+        return 1.0
+    return 4.0
+
+
+def _construir_dim_pregunta(fact: pd.DataFrame, cat: pd.DataFrame) -> pd.DataFrame:
     """
-    Pipeline principal 02a.
-    1. Carga fact_respuestas_clean
-    2. V1-Paso1: Codificación texto → número
-    3. V1-Paso2: Inversión Nivel 1
-    4. V1-Pasos 3-8: Agrupaciones ítem → dimensión
-    5. Guarda fact_scores_brutos.parquet
-    6. Valida y reporta
+    Construye dim_pregunta desde categorias_analisis.
+
+    NOTA IMPORTANTE: En la hoja categorias_analisis del Excel, los sufijos
+    de id_pregunta para 'afrontamiento' y 'capitalpsicologico' están INVERTIDOS
+    respecto a fact_respuestas. Esta función corrige ese swap:
+
+      fact: sufijo 'afrontamiento'      = instrumento de coping ("nunca hago eso")
+      fact: sufijo 'capitalpsicologico' = capital psicológico ("de acuerdo")
+
+      categorias: id con 'afrontamiento'      → dims CapPsic (Autoeficacia, etc.)
+      categorias: id con 'capitalpsicologico' → dims Afrontamiento (activo_, etc.)
+
+    Derivaciones:
+      instrumento   ← sufijo en fact + forma_intra
+      dimension     ← categorias_analisis (con swap)
+      dominio       ← mapa dimension→dominio hardcodeado (batería Ministerio)
+      factor        ← categorias_analisis
     """
-    config    = cargar_config(config_path)
-    ruta_in   = Path(config["paths"]["processed"]) / "fact_respuestas_clean.parquet"
-    ruta_out  = Path(config["paths"]["processed"]) / "fact_scores_brutos.parquet"
+    # ── Swap de sufijos entre fact y categorias ─────────────────────────────
+    SWAP = {
+        "afrontamiento":     "capitalpsicologico",
+        "capitalpsicologico": "afrontamiento",
+    }
 
-    log.info("=" * 60)
-    log.info("02a_scoring_bateria.py — Iniciando pipeline")
-    log.info("Input:  %s", ruta_in)
-    log.info("Output: %s", ruta_out)
-    log.info("=" * 60)
+    # ── Instrumento según sufijo ─────────────────────────────────────────────
+    INSTRUMENTO_MAP: dict[str, str | dict] = {
+        "extra":             "Extralaboral",
+        "estres":            "Estres",
+        "afrontamiento":     "Afrontamiento",
+        "capitalpsicologico": "CapPsico",
+    }  # "intra" se resuelve con forma_intra
 
-    # --- Carga
-    if not ruta_in.exists():
-        log.error("Archivo no encontrado: %s", ruta_in)
-        log.error("Ejecutar primero: 01_etl_star_schema.py")
-        sys.exit(1)
+    # ── Dominio intralaboral (Ministerio, Res. 2764/2022) ────────────────────
+    DOMINIO_INTRA: dict[str, str] = {
+        # Demandas del trabajo
+        "Demandas cuantitativas":                      "Demandas del trabajo",
+        "Demandas de carga mental":                    "Demandas del trabajo",
+        "Demandas emocionales":                        "Demandas del trabajo",
+        "Exigencias de responsabilidad del cargo":     "Demandas del trabajo",
+        "Demandas ambientales y de esfuerzo f\u00edsico": "Demandas del trabajo",
+        "Consistencia del rol":                        "Demandas del trabajo",
+        "Demandas de la jornada de trabajo":           "Demandas del trabajo",
+        "Influencia del trabajo sobre el entorno extra": "Demandas del trabajo",
+        # Control sobre el trabajo
+        "Control y autonom\u00eda sobre el trabajo":  "Control sobre el trabajo",
+        "Oportunidades de desarrollo y uso de habilidad": "Control sobre el trabajo",
+        "Participaci\u00f3n y manejo del cambio":     "Control sobre el trabajo",
+        "Claridad de rol":                             "Control sobre el trabajo",
+        "Capacitaci\u00f3n":                          "Control sobre el trabajo",
+        # Liderazgo y relaciones sociales
+        "Caracter\u00edsticas del liderazgo":         "Liderazgo y relaciones sociales",
+        "Relaciones sociales en el trabajo":           "Liderazgo y relaciones sociales",
+        "Retroalimentaci\u00f3n del desempe\u00f1o": "Liderazgo y relaciones sociales",
+        "Relaci\u00f3n con los colaboradores (subordinados)": "Liderazgo y relaciones sociales",
+        # Recompensas
+        "Reconocimiento y compensaci\u00f3n":         "Recompensas",
+        "Recompensas derivadas de la pertenencia a la": "Recompensas",
+    }
 
-    df = pd.read_parquet(ruta_in)
-    log.info("Cargados %d registros × %d columnas", len(df), df.shape[1])
-    log.info("Formas disponibles: %s", df["forma_intra"].str.upper().unique().tolist())
-    log.info("Empresas: %s", df["empresa"].unique().tolist())
+    # ── Preparar categorias: calcular sufijo real en fact ───────────────────
+    cat = cat[["id_pregunta", "forma_intra", "dimension", "factor"]].copy()
+    cat["num"]       = cat["id_pregunta"].str.split("_", n=1).str[0]
+    cat["suf_cat"]   = cat["id_pregunta"].str.split("_", n=1).str[1]
+    # sufijo que tendrá en fact_respuestas (aplicar swap)
+    cat["suf_fact"]  = cat["suf_cat"].map(lambda s: SWAP.get(s, s))
+    cat["id_fact"]   = cat["num"] + "_" + cat["suf_fact"]
 
-    # Verificar columna instrumento (generada en ETL)
-    if "instrumento" not in df.columns:
-        log.error("Columna 'instrumento' no encontrada. Verificar 01_etl_star_schema.py")
-        sys.exit(1)
+    # ── IDs únicos de fact ───────────────────────────────────────────────────
+    fact_ids = (
+        fact[["id_pregunta", "forma_intra"]]
+        .drop_duplicates()
+        .copy()
+    )
+    fact_ids["sufijo"] = fact_ids["id_pregunta"].str.split("_", n=1).str[1]
 
-    # --- V1-Paso1: Codificación
-    df = aplicar_codificacion(df)
-
-    # --- V1-Paso2: Inversión Nivel 1
-    df = aplicar_inversion_nivel1(df)
-
-    # --- V1-Pasos 3-8: Agrupaciones
-    df = aplicar_agrupaciones(df)
-
-    # --- Seleccionar columnas finales
-    cols_finales = [
-        "cedula", "empresa", "forma_intra", "sector_rag",
-        "instrumento", "id_pregunta", "id_respuesta_texto",
-        "valor_numerico", "valor_invertido",
-        "factor", "dominio", "dimension",
+    # ── JOIN intra: específico por forma ─────────────────────────────────────
+    intra_cat = cat[cat["suf_cat"] == "intra"][
+        ["id_fact", "forma_intra", "dimension", "factor"]
     ]
-    cols_disponibles = [c for c in cols_finales if c in df.columns]
-    df_out = df[cols_disponibles].copy()
+    intra_fact = fact_ids[fact_ids["sufijo"] == "intra"]
+    intra_merged = intra_fact.merge(
+        intra_cat.rename(columns={"id_fact": "id_pregunta", "forma_intra": "forma_cat"}),
+        left_on=["id_pregunta", "forma_intra"],
+        right_on=["id_pregunta", "forma_cat"],
+        how="left",
+    ).drop(columns="forma_cat", errors="ignore")
 
-    # --- Guardar
-    ruta_out.parent.mkdir(parents=True, exist_ok=True)
-    df_out.to_parquet(ruta_out, index=False)
-    log.info("Guardado: %s (%d filas × %d cols)", ruta_out, len(df_out), df_out.shape[1])
+    # ── JOIN otros instrumentos: sin restricción de forma ───────────────────
+    other_cat = (
+        cat[cat["suf_cat"] != "intra"]
+        .drop_duplicates("id_fact")[["id_fact", "dimension", "factor"]]
+    )
+    other_fact = fact_ids[fact_ids["sufijo"] != "intra"]
+    other_merged = other_fact.merge(
+        other_cat.rename(columns={"id_fact": "id_pregunta"}),
+        on="id_pregunta",
+        how="left",
+    )
 
-    # --- Validación final
-    ok, df_err = validar_scores_brutos(df_out)
-    if not ok:
-        log.error("Pipeline 02a completado con ERRORES — revisar validación")
+    result = pd.concat([intra_merged, other_merged], ignore_index=True)
+
+    # ── Instrumento ──────────────────────────────────────────────────────────
+    def _instrumento(row) -> str:
+        s = row["sufijo"]
+        if s == "intra":
+            return "IntraA" if row["forma_intra"] == "A" else "IntraB"
+        return INSTRUMENTO_MAP.get(s, s)
+
+    result["instrumento"] = result.apply(_instrumento, axis=1)
+
+    # ── Dominio ──────────────────────────────────────────────────────────────
+    def _dominio(row) -> str:
+        s = row["sufijo"]
+        if s == "intra":
+            return DOMINIO_INTRA.get(str(row.get("dimension", "")), "Sin dominio")
+        elif s == "extra":
+            return "Extralaboral"
+        elif s == "estres":
+            return "Estr\u00e9s"
+        elif s == "afrontamiento":
+            return "Afrontamiento"
+        elif s == "capitalpsicologico":
+            return "Vulnerabilidad"
+        return None
+
+    result["dominio"] = result.apply(_dominio, axis=1)
+
+    dim_pq = result[
+        ["id_pregunta", "forma_intra", "instrumento", "dimension", "dominio", "factor"]
+    ].drop_duplicates(["id_pregunta", "forma_intra"])
+
+    sin_dim = dim_pq["dimension"].isna().sum()
+    if sin_dim > 0:
+        log.warning("dim_pregunta — %d ítems sin dimensión asignada", sin_dim)
+
+    log.info(
+        "dim_pregunta construida: %d ítems — instrumentos: %s",
+        len(dim_pq), sorted(dim_pq["instrumento"].unique().tolist()),
+    )
+    return dim_pq
+
+
+def main():
+    log.info("=" * 60)
+    log.info("SCRIPT 02a — Scoring Batería (Pasos 1-8)")
+    log.info("=" * 60)
+
+    cfg = cargar_config()
+    proc = ROOT / cfg["paths"]["processed"]
+
+    # Cargar insumos
+    fact = pd.read_parquet(proc / "fact_respuestas_clean.parquet")
+    categorias = pd.read_parquet(proc / "categorias_analisis.parquet")
+    log.info("fact_respuestas_clean: %d filas", len(fact))
+
+    # Construir dim_pregunta internamente (no existe como hoja Excel)
+    dim_pregunta = _construir_dim_pregunta(fact, categorias)
+
+    # ── PASO 1: codificación texto → número ────────────────────────────────
+    log.info("Paso 1 — Codificando respuestas texto → número...")
+    fact = fact.copy()
+    fact["valor_numerico"] = aplicar_paso1_vectorizado(fact)
+    nan_count = fact["valor_numerico"].isna().sum()
+    log.info(
+        "Paso 1 completado — %d valores codificados, %d no mapeados (%.1f%%)",
+        len(fact) - nan_count, nan_count, nan_count / len(fact) * 100,
+    )
+
+    # Reporte de respuestas no mapeadas (para debugging)
+    if nan_count > 0:
+        no_mapeadas = fact[fact["valor_numerico"].isna()][
+            ["id_pregunta", "forma_intra", "id_respuesta"]
+        ].value_counts().head(20)
+        log.warning("Top respuestas no mapeadas:\n%s", no_mapeadas.to_string())
+
+    # Descartar filas con valor_numerico nulo:
+    # - Ítems fuera de la forma del trabajador (e.g. ítems 98-125 para IntraB → "No aplica")
+    # - Respuestas no reconocidas en las escalas de codificación
+    n_antes = len(fact)
+    fact = fact.dropna(subset=["valor_numerico"])
+    n_dropped = n_antes - len(fact)
+    if n_dropped > 0:
+        log.warning(
+            "Descartadas %d filas con valor_numerico nulo (ítems no aplicables a esta forma, %.1f%%)",
+            n_dropped, 100 * n_dropped / n_antes,
+        )
+
+    # Agregar max_item_score (necesario en 02b para calcular transformacion_max)
+    fact["max_item_score"] = fact.apply(
+        lambda r: _max_valor_item(r["id_pregunta"], r["forma_intra"]), axis=1
+    )
+
+    # ── PASO 2: inversión de ítems (requiere es_item_invertido en dim_pregunta) ──
+    log.info("Paso 2 — Invirtiendo ítems marcados como es_item_invertido=True...")
+    fact = aplicar_paso2(fact)
+
+    # ── PASOS 3-8: agrupaciones → instrumento, dimensión, dominio, factor ──
+    log.info("Pasos 3-8 — Asignando instrumento, dimensión, dominio, factor...")
+    fact = aplicar_pasos3_a_8(fact, dim_pregunta)
+
+    # ── Validación (R14) ────────────────────────────────────────────────────
+    es_valido, reporte = validar_scores_brutos(fact)
+    if not es_valido:
+        log.error("Validación FALLIDA:\n%s", reporte.to_string())
         sys.exit(1)
+    log.info("Validación OK")
 
-    # --- Resumen estadístico
-    log.info("-" * 40)
-    log.info("RESUMEN FACT_SCORES_BRUTOS:")
-    log.info("  Total registros  : %d", len(df_out))
-    log.info("  Trabajadores únicos: %d", df_out["cedula"].nunique())
-    log.info("  Instrumentos     : %s", df_out["instrumento"].str.lower().unique().tolist())
-    log.info("  Dimensiones únicas: %d", df_out["dimension"].nunique())
-    log.info("  Dominios únicos  : %d", df_out["dominio"].nunique())
-    log.info("  NaN en valor_invertido: %d", df_out["valor_invertido"].isna().sum())
-    log.info("-" * 40)
-    log.info("02a completado exitosamente.")
+    # ── Guardar (R13) ───────────────────────────────────────────────────────
+    out = proc / "fact_scores_brutos.parquet"
+    fact.to_parquet(out, index=False)
+    log.info("Guardado: %s (%d filas × %d columnas)", out, *fact.shape)
+
+    log.info("=" * 60)
+    log.info("Pasos 1-8 completados → fact_scores_brutos.parquet")
+    log.info("=" * 60)
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="02a_scoring_bateria.py — V1 Pasos 1-8")
-    parser.add_argument("--config", default="config/config.yaml",
-                        help="Ruta al archivo config.yaml")
-    args = parser.parse_args()
-    main(config_path=args.config)
+    main()

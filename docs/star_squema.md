@@ -20,19 +20,45 @@ Filas: 180,617
 Columnas: 10
 PK: cedula + forma_intra + id_pregunta
 
-Columna           Tipo      Descripción
-cedula            str/int   Documento de identidad trabajador
-nombre            str       Nombre completo
-forma_intra       str       'A' (jefes) | 'B' (operativos)
-empresa           str       Nombre empresa cliente (incluye ASIGNAR, EVENTUAL)
-sector_economico  str       6 valores: Agricultura|Comercio|Construcción|
-                              Manufactura|Servicios|Transporte
-pct_ausentismo    float     Porcentaje ausentismo del trabajador
-dias_ausentismo   int       Días de ausentismo en el período
-accidente_laboral bool/int  1 = tuvo accidente | 0 = no tuvo
-id_pregunta       int       Identificador del ítem (1-125 IntraA | 1-97 IntraB)
-id_respuesta      int/str   Código de respuesta (0-4 Likert | 0-1 dicotómica)
+Columna              Tipo    Descripción
+cedula               str     Documento de identidad trabajador
+nombre               str     Nombre completo
+forma_intra          str     'A' (jefes/coordinadores) | 'B' (operativos/auxiliares)
+                             SOLO diferencia intraA vs intraB. Los demás instrumentos
+                             (extra, estrés, afrontamiento, capitalpsic) usan id_pregunta
+                             para identificarse — NO dependen de forma_intra.
+empresa              str     Nombre empresa cliente (incluye ASIGNAR=empresa real, R7)
+sector_economico     str     6 valores: Agricultura|Comercio|Construcción|
+                               Manufactura|Servicios|Transporte
+ausentismo_eg_si_no  str     'si'/'no' — ausentismo enfermedad general
+ausentismo_al_si_no  str     'si'/'no' — ausentismo accidente laboral
+dias_ausencia        int     Días de ausencia en el período
+id_pregunta          str     *** IDENTIFICADOR ÚNICO ítem+instrumento ***
+                             Formato: "{numero}_{sufijo_instrumento}"
+                             Sufijos y rangos:
+                               _intra       → 1-125 (A) | 1-98 (B) — Likert + 2 dicot. en A, 1 en B
+                               _extra       → 1-31   (ambas formas)
+                               _estres      → 1-31   (ambas formas, 3 grupos de pesos)
+                               _afrontamiento → 1-12 (ambas formas)
+                               _capitalpsic → 1-12   (ambas formas)
+                             Ejemplos: "1_intra", "106_intra", "1_extra", "1_estres",
+                                       "1_afrontamiento", "1_capitalpsic"
+                             Con forma_intra='A'|'B' + sufijo '_intra' → intraA o intraB
+id_respuesta         str     *** TEXTO DE RESPUESTA capturado en la evaluación ***
+                             Por instrumento:
+                               _intra/_extra : "Siempre"|"Casi siempre"|"Algunas veces"|
+                                               "Casi nunca"|"Nunca"|"si"|"no" (dicot.)
+                               _estres       : "Siempre"|"Casi siempre"|"A veces"|"Nunca"
+                               _afrontamiento: "nunca hago eso"|"a veces hago eso"|
+                                               "frecuentemente hago eso"|"siempre hago eso"
+                               _capitalpsic  : "totalmente en desacuerdo"|"en desacuerdo"|
+                                               "de acuerdo"|"totalmente de acuerdo"
 ```
+
+> **CORRECCIÓN vs versiones anteriores**: id_pregunta NO es int — es str con sufijo de instrumento.
+> id_respuesta NO es el código numérico — es el TEXTO de respuesta tal como se capturó.
+> Ausentismo: columnas reales son ausentismo_eg_si_no, ausentismo_al_si_no, dias_ausencia
+> (NO pct_ausentismo / dias_ausentismo / accidente_laboral como estaba en versiones previas).
 
 ---
 
@@ -48,18 +74,35 @@ Columnas:
 
 ### dim_pregunta
 ```
-PK: id_pregunta + instrumento
+PK: id_pregunta   (globalmente único — incluye sufijo instrumento)
 Columnas:
-  id_pregunta | instrumento | texto_pregunta | dimension
-  dominio | factor | forma_aplicacion | tipo_escala
-  es_item_invertido | peso_item | eje_gestion | linea_gestion | indicador_gestion
+  id_pregunta      — mismo formato que fact: "1_intra", "1_extra", etc.
+  instrumento      — intra | extra | estres | afrontamiento | capitalpsic
+  num_item         — número dentro del instrumento (int, 1-125)
+  texto_pregunta   — texto completo de la pregunta
+  dimension        — agrupación de ítems en dimensión
+  dominio          — agrupación de dimensiones en dominio
+  factor           — factor del instrumento (intralaboral|extralaboral|estres|individual)
+  forma_aplicacion — 'A' | 'B' | 'AB' (si aplica a ambas formas)
+  tipo_escala      — 'likert_0_4' | 'dico' | 'estres_g1' | 'estres_g2' | 'estres_g3'
+                     | 'afrontamiento' | 'capitalpsic'
+  es_item_invertido — bool — True si aplica inversión Nivel 1 (R3)
+  peso_item        — float — peso para media ponderada en modelo gestión (R9)
+  eje_gestion      — eje del modelo AVANTUM
+  linea_gestion    — línea de gestión AVANTUM
+  indicador_gestion — indicador de gestión AVANTUM
 ```
 
 ### dim_respuesta
 ```
-PK: id_respuesta + tipo_escala
+NOTA: Con id_respuesta siendo texto libre, esta tabla actúa como catálogo
+de normalización de respuestas (limpieza de variantes de escritura).
+PK: texto_respuesta_normalizado + tipo_escala
 Columnas:
-  id_respuesta | tipo_escala | texto_respuesta | valor_numerico | orden
+  texto_original   — variante de texto como puede venir en el raw
+  texto_normalizado — versión canónica (para matching consistente)
+  tipo_escala      — 'likert_0_4' | 'dico' | 'estres_g1|g2|g3' | 'afrontamiento' | 'capitalpsic'
+  valor_numerico   — float — valor codificado (Paso 1, R3)
 ```
 
 ### dim_baremo
@@ -230,9 +273,9 @@ Guardado: data/processed/fact_costo_ausentismo.parquet
 fact_respuestas_clean
   ├── FK cedula         → dim_trabajador (cedula)
   ├── FK cedula         → dim_demografia (cedula)
-  ├── FK cedula         → dim_ausentismo (cedula) [LEFT JOIN]
-  ├── FK id_pregunta    → dim_pregunta (id_pregunta)
-  └── FK id_respuesta   → dim_respuesta (id_respuesta)
+  ├── FK cedula         → dim_ausentismo (cedula) [LEFT JOIN — R6]
+  ├── FK id_pregunta    → dim_pregunta (id_pregunta)  [JOIN directo, PK única]
+  └── id_respuesta      → dim_respuesta (normalización texto) [opcional, para limpieza]
 
 fact_scores_baremo
   ├── FK cedula + nivel_analisis → dim_baremo

@@ -1,5 +1,6 @@
 # instrucciones_UX_UI.md — Design System AVANTUM
-> Reglas de diseño obligatorias para todos los dashboards MentalPRO | Versión 1.5
+> Reglas de diseño obligatorias para todos los dashboards MentalPRO | Versión 2.0
+> **Los dashboards son HTML estático (sin servidor Dash). Ver R19 en reglas_negocio.md.**
 
 ---
 
@@ -7,18 +8,18 @@
 
 | Código | Regla |
 |--------|-------|
-| RC-01 | Registrar pio.templates.default = 'avantum' al inicio de app.py ANTES de cualquier figura |
-| RC-02 | Usar paper_bgcolor='rgba(0,0,0,0)' en TODAS las figuras. El fondo lo maneja CSS. |
+| RC-01 | Registrar `pio.templates['avantum'] = AVANTUM_TEMPLATE` y `pio.templates.default = 'avantum'` al inicio de cada script dashboard, ANTES de crear cualquier figura. |
+| RC-02 | Usar `paper_bgcolor='rgba(0,0,0,0)'` en TODAS las figuras. El fondo lo define el CSS del HTML. |
 | RC-03 | Los 5 colores risk_1…risk_5 son normativos (Res. 2764). NUNCA cambiarlos. |
-| RC-04 | NUNCA usar fig.show() en producción Dash. Solo retornar figuras desde callbacks. |
-| RC-05 | Todo label, título y leyenda: color='#FFFFFF'. Sin excepciones. |
-| RC-06 | hovertemplate obligatorio en cada go.Trace. |
-| RC-07 | Nunca omitir xaxis.title y yaxis.title. Accesibilidad mínima. |
+| RC-04 | Export: `fig.to_html(full_html=False, include_plotlyjs=False)`. El HTML principal carga Plotly CDN una sola vez. |
+| RC-05 | Todo label, título y leyenda: `color='#FFFFFF'`. Sin excepciones. |
+| RC-06 | `hovertemplate` obligatorio en cada `go.Trace`. |
+| RC-07 | Nunca omitir `xaxis.title` y `yaxis.title`. Accesibilidad mínima. |
 | RC-08 | Alturas mínimas: KPI=280px, análisis=400px, heatmaps=520px |
-| RC-09 | export_format='xlsx' en TODAS las DataTable con datos individuales |
-| RC-10 | La ruta / debe redirigir a /riesgo (dashboard principal) |
-| RC-11 | dcc.Graph con responsive=True siempre |
-| RC-12 | @lru_cache en todas las funciones de carga de datos |
+| RC-09 | Canvas total por dashboard: **3000×2000 px**, orientación vertical. Secciones apiladas verticalmente. |
+| RC-10 | Filtros interactivos implementados en **JavaScript vanilla** (no Dash callbacks). Un bloque HTML por empresa×forma, JS muestra/oculta según dropdown. |
+| RC-11 | Incluir Plotly CDN una sola vez al inicio del HTML: `<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>` |
+| RC-12 | Regla R8 de confidencialidad implementada en el script Python ANTES de generar las figuras. Grupos N<5 → celda "Confidencial" en heatmaps, fila omitida en tablas. |
 
 ---
 

@@ -1,0 +1,93 @@
+paths:
+  raw: "data/raw"
+  processed: "data/processed"
+  final: "data/final"
+  output: "output"
+  # Archivos fuente (R16 — 2 archivos separados)
+  raw_fact: "data/raw/Resultado_mentalPRO.xlsx"
+  raw_dims: "data/raw/datasets.xlsx"
+  # Hojas del archivo de dimensiones (nombres reales en datasets.xlsx)
+  sheet_trabajador:   "planta_personal"
+  sheet_pregunta:     null               # no existe como hoja — se construye desde la batería
+  sheet_respuesta:    null               # no existe como hoja — catálogo interno del script
+  sheet_baremo:       null               # no existe como hoja — hardcodeado en 02b_baremos.py
+  sheet_demografia:   "ficha_demografia"
+  sheet_ausentismo:   "ausentismo_12meses"
+  sheet_categorias:   "categorias_analisis"
+  # Hoja de la tabla de hechos
+  sheet_fact:         "FactRespuestas"
+
+# Parámetros económicos (R10)
+smlv_mensual: 2800000
+presentismo_factor: 1.40
+costo_empleador_pct: 0.60
+psicosocial_pct: 0.30
+
+# Benchmarking Colombia — Paso 17: % Alto+MuyAlto factor intralaboral por sector
+# Fuente: III Encuesta Condiciones de Salud y Trabajo 2021
+benchmark_sector:
+  "Agricultura":            31.01
+  "Manufactura":            44.83
+  "Servicios":              37.20
+  "Construcción":           42.21
+  "Comercio/financiero":    36.40
+  "Minas y canteras":       42.92
+  "Administración pública": 35.98
+  "Educación":              40.44
+  "Salud":                  40.28
+  "Transporte":             37.20   # sin dato ENCST → usa Servicios
+  "No clasificado":         39.69   # promedio general como fallback
+  "_promedio_general":      39.69   # referencia general Colombia
+
+# Benchmarking Colombia — Paso 18: % Alto+MuyAlto por dominio
+# Fuente: II y III Encuesta Condiciones de Salud y Trabajo 2013-2021
+# Claves en snake_case — coincidir con nombre_nivel en fact_scores_baremo
+benchmark_dominio:
+  "demandas_del_trabajo":                43.90
+  "control_sobre_el_trabajo":            16.90
+  "liderazgo_relaciones_sociales":       13.30
+  "recompensas":                          3.30
+  "extralaboral":                        26.30
+  "estres":                             32.90
+  "vulnerabilidad":                       4.20
+  "_promedio_general":                   39.69
+
+# Benchmarking Colombia — Paso 19: % Alto+MuyAlto por dimensión
+# Fuente: II y III Encuesta Condiciones de Salud y Trabajo 2013-2021
+benchmark_dimension:
+  "Demandas de carga mental":                                    58.2
+  "Demandas emocionales":                                        49.4
+  "Demandas cuantitativas":                                      39.2
+  "Características del liderazgo":                               25.9
+  "Control y autonomía sobre el trabajo":                        22.1
+  "Influencia del trabajo sobre el entorno extralaboral":        21.5
+  "Claridad de rol":                                             20.5
+  "Oportunidades para el uso y desarrollo de habilidades y conocimientos": 18.4
+  "Capacitación":                                                11.0
+  "Relaciones sociales en el trabajo":                           10.1
+  "Supuesto acoso laboral":                                       8.2
+  "Claridad del rol B":                                           5.8
+
+# Semáforo (R5)
+semaforo_rojo_pct: 35.0   # Si empresa_pct > 35% → rojo
+confidencialidad_n_min: 5  # R8 — grupos < 5 → no mostrar
+
+# Colores AVANTUM (R11 — inamovibles)
+colores_riesgo:
+  sin_riesgo: "#10B981"
+  bajo:       "#6EE7B7"
+  medio:      "#F59E0B"
+  alto:       "#F97316"
+  muy_alto:   "#EF4444"
+
+colores_proteccion:
+  muy_bajo: "#EF4444"
+  bajo:     "#F97316"
+  medio:    "#F59E0B"
+  alto:     "#6EE7B7"
+  muy_alto: "#10B981"
+
+colores_avantum:
+  navy: "#0A1628"
+  gold: "#C9952A"
+  cyan: "#00C2CB"

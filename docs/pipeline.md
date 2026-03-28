@@ -15,7 +15,7 @@
 | 05_prioridades_protocolos.py | V2-Paso6 · V2-Paso7 | fact_prioridades |
 | 06_benchmarking.py | V1-Paso16 · V1-Paso17 · V1-Paso18 · V1-Paso19 | fact_benchmark |
 | 07_frecuencias_preguntas.py | V1-Paso20 | fact_frecuencias |
-| 08_consolidado_demografico.py | V1-Paso21 · V3-Paso1 (19 KPIs) | fact_consolidado + fact_kpis_gerenciales |
+| 08_consolidacion.py | V1-Paso21 · V3-Paso1 (19 KPIs) | fact_consolidado + fact_kpis_gerenciales |
 | 09_costo_ausentismo.py | V4-Paso1 (fórmula 6 pasos) | fact_costo_ausentismo |
 | dashboard_v1_riesgo.py | V1-Paso21 layout completo V1 | — |
 | dashboard_v2_gestion.py | V2-Paso8 layout completo V2 | — |
@@ -169,7 +169,7 @@ Top 20 preguntas críticas (39 preguntas clave con referencia ENCST II-III):
 
 ---
 
-### 08_consolidado_demografico.py
+### 08_consolidacion.py
 
 #### V1-Paso21 — Base consolidada + layout V1
 ```
@@ -295,7 +295,7 @@ F: Tabla gestión + protocolos por sector + endpoint RAG
 
 ## VISUALIZADOR 3 — Dashboard Gerencial / Ejecutivo
 
-### 08_consolidado_demografico.py + dashboard_v3_gerencial.py
+### 08_consolidacion.py + dashboard_v3_gerencial.py
 
 #### V3-Paso1 — 19 KPIs Gerenciales
 ```

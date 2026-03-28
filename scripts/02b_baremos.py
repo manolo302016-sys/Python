@@ -1,602 +1,519 @@
 """
-02b_baremos.py — Implementa V1-Pasos 9 a 15
-Pasos:
-  V1-Paso9  : Baremos dimensiones intralaboral A/B (Res. 2764)
-  V1-Paso10 : Baremos dimensiones extralaboral A/B (Res. 2764)
-  V1-Paso11 : Baremos dimensiones individual AVANTUM (afrontamiento + cap.psicológico)
-  V1-Paso12 : Baremos dominios intralaboral A/B (Res. 2764)
-  V1-Paso13 : Baremos dominios individual AVANTUM
-  V1-Paso14 : Baremos factor total (intra, extra, estrés) A/B (Res. 2764)
-  V1-Paso15 : Baremos factor individual AVANTUM
+02b_baremos.py
+==============
+Pasos 9-15 del pipeline V1 — Puntajes brutos + transformados + nivel de riesgo/protección.
 
-Input:  data/processed/fact_scores_brutos.parquet
+PASO 9   Baremos Ministerio — Dimensiones intralaboral A y B
+PASO 10  Baremos Ministerio — Dimensiones extralaboral A y B
+PASO 11  Baremos Avantum   — Dimensiones individual (afrontamiento + capitalpsic) A y B
+PASO 12  Baremos Ministerio — Dominios intralaboral A y B
+PASO 13  Baremos Avantum   — Dominios individual A y B
+PASO 14  Baremos Ministerio — Factores intra + extra + estrés A y B
+PASO 15  Baremos Avantum   — Factor individual A y B
+
+Proceso estándar para cada nivel:
+  1. Suma de valor_invertido por (cedula, forma_intra, nivel, nombre) → puntaje_bruto
+  2. Puntaje transformado = round(puntaje_bruto / transformacion_max * 100, 2)
+  3. Clasificar en 5 niveles usando cortes de dim_baremo
+
+Tipo baremo:
+  'riesgo'     → Niveles 1-5: Sin riesgo | Bajo | Medio | Alto | Muy alto
+  'proteccion' → Niveles 1-5: Muy bajo | Bajo | Medio | Alto | Muy alto
+
 Output: data/processed/fact_scores_baremo.parquet
 
-Reglas críticas:
-  R2 : Baremos diferenciados A/B — NUNCA mezclar formas
-  R5 : 5 niveles de riesgo normativos (Res. 2764/2022) — NUNCA reducir a 3
-  R7 : Colores normativos: risk_1=#10B981, risk_2=#6EE7B7, risk_3=#F59E0B, risk_4=#F97316, risk_5=#EF4444
+Reglas:
+  R2  — Baremos diferenciados A (max 492) / B (max 388) para factor total intra
+  R8  — Grupos < 5 trabajadores → tratados en dashboards (no aquí)
+  R13 — Output Parquet
+  R14 — Validación obligatoria
 
-Fórmula general:
-  puntaje_transformado = (puntaje_bruto / transformacion_max) * 100
-  nivel_riesgo = clasificar según puntos de corte
+Nota Paso 13 — Dominio Afrontamiento: fórmula PONDERADA (no suma simple):
+  score = ((activo_planificacion × 0.25) + (busqueda_soporte × 0.25) + (pasivo_negacion × 0.50)) / 4 × 100
+  transformacion_max = 4, cortes protección: 29 | 51 | 69 | 89
 
-Fuente documental: Visualizador 1, Pasos 9-15
-Versión: 1.0 | Pipeline MentalPRO | Res. 2764/2022 MinTrabajo Colombia
+Nota Paso 16 — Riesgo total empresa: se calcula en 06_benchmarking.py (nivel empresa).
+  Este script genera solo puntajes INDIVIDUALES por trabajador.
 """
 
 import logging
 import sys
 from pathlib import Path
-from typing import Tuple, List, Dict
-import numpy as np
+
 import pandas as pd
 import yaml
 
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = ROOT / "config" / "config.yaml"
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
-log = logging.getLogger("02b_baremos")
+log = logging.getLogger(__name__)
 
 
-def cargar_config(config_path: str = "config/config.yaml") -> dict:
-    with open(config_path, "r", encoding="utf-8") as f:
+# ══════════════════════════════════════════════════════════════════════════════
+# Mapeo instrumento → tipo_baremo por defecto (si dim_baremo no lo especifica)
+# ══════════════════════════════════════════════════════════════════════════════
+TIPO_BAREMO_DEFECTO: dict[str, str] = {
+    "IntraA":       "riesgo",
+    "IntraB":       "riesgo",
+    "Extralaboral": "riesgo",
+    "Estres":       "riesgo",
+    "Afrontamiento": "proteccion",
+    "CapPsico":     "proteccion",
+}
+
+# Etiquetas por nivel y tipo de baremo
+LABELS_RIESGO = {1: "Sin riesgo", 2: "Bajo", 3: "Medio", 4: "Alto", 5: "Muy alto"}
+LABELS_PROTECCION = {1: "Muy bajo", 2: "Bajo", 3: "Medio", 4: "Alto", 5: "Muy alto"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Helpers
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cargar_config() -> dict:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-# ===========================================================================
-# TABLAS DE BAREMOS — Puntos de corte Res. 2764/2022
-# Fuente: Visualizador 1 Pasos 9-15
-# Niveles: 1=Sin riesgo, 2=Bajo, 3=Medio, 4=Alto, 5=Muy alto
-# ===========================================================================
-
-# ---------------------------------------------------------------------------
-# V1-Paso9: Baremos DIMENSIONES INTRALABORAL A/B (Res. 2764)
-# Estructura: forma, dimension, transf_max, sin_riesgo_max, bajo_max, medio_max, alto_max
-# ---------------------------------------------------------------------------
-BAREMO_DIM_INTRA = [
-    # --- Forma A ---
-    ("A", "Demandas ambientales y de esfuerzo físico", 48, 14.6, 22.9, 31.3, 43.8),
-    ("A", "Demandas emocionales", 36, 16.7, 25.0, 33.3, 47.2),
-    ("A", "Demandas cuantitativas", 24, 25.0, 33.3, 41.7, 54.2),
-    ("A", "Influencia del trabajo sobre el entorno extralaboral", 16, 18.8, 31.3, 43.8, 56.3),
-    ("A", "Exigencias de responsabilidad del cargo", 24, 37.5, 54.2, 66.7, 83.3),
-    ("A", "Demandas de carga mental", 20, 60.0, 70.0, 80.0, 95.0),
-    ("A", "Consistencia del rol", 20, 15.0, 25.0, 35.0, 45.0),
-    ("A", "Demandas de la jornada de trabajo", 12, 8.3, 25.0, 41.7, 58.3),
-    ("A", "Claridad de rol", 28, 0.9, 10.7, 21.4, 35.7),
-    ("A", "Capacitación", 12, 0.9, 16.7, 33.3, 50.0),
-    ("A", "Participación y manejo del cambio", 16, 12.5, 25.0, 37.5, 50.0),
-    ("A", "Oportunidades para el uso y desarrollo de habilidades y conocimientos", 16, 0.9, 6.3, 18.8, 37.5),
-    ("A", "Control y autonomía sobre el trabajo", 12, 8.3, 25.0, 41.7, 58.3),
-    ("A", "Características del liderazgo", 52, 3.8, 15.4, 26.9, 42.3),
-    ("A", "Relaciones sociales en el trabajo", 56, 5.4, 16.1, 26.8, 41.1),
-    ("A", "Retroalimentación del desempeño", 20, 10.0, 25.0, 40.0, 60.0),
-    ("A", "Relación con los colaboradores", 36, 13.9, 25.0, 36.1, 50.0),
-    ("A", "Recompensas derivadas de la pertenencia a la organización y del trabajo", 20, 0.9, 5.0, 15.0, 30.0),
-    ("A", "Reconocimiento y compensación", 24, 4.2, 16.7, 29.2, 45.8),
-    # --- Forma B ---
-    ("B", "Demandas ambientales y de esfuerzo físico", 48, 22.9, 31.3, 39.6, 52.1),
-    ("B", "Demandas emocionales", 36, 19.4, 27.8, 36.1, 50.0),
-    ("B", "Demandas cuantitativas", 12, 16.7, 33.3, 50.0, 66.7),
-    ("B", "Influencia del trabajo sobre el entorno extralaboral", 16, 12.5, 25.0, 37.5, 56.3),
-    ("B", "Demandas de carga mental", 20, 50.0, 65.0, 75.0, 90.0),
-    ("B", "Demandas de la jornada de trabajo", 24, 25.0, 37.5, 50.0, 66.7),
-    ("B", "Claridad de rol", 20, 0.9, 5.0, 15.0, 30.0),
-    ("B", "Capacitación", 12, 0.9, 16.7, 33.3, 50.0),
-    ("B", "Participación y manejo del cambio", 12, 16.7, 33.3, 50.0, 66.7),
-    ("B", "Oportunidades para el uso y desarrollo de habilidades y conocimientos", 16, 12.5, 25.0, 37.5, 56.3),
-    ("B", "Control y autonomía sobre el trabajo", 12, 33.3, 50.0, 66.7, 83.3),
-    ("B", "Características del liderazgo", 52, 3.8, 13.5, 25.0, 40.4),
-    ("B", "Relaciones sociales en el trabajo", 48, 6.3, 14.6, 27.1, 41.7),
-    ("B", "Retroalimentación del desempeño", 20, 5.0, 20.0, 35.0, 55.0),
-    ("B", "Recompensas derivadas de la pertenencia a la organización y del trabajo", 16, 0.9, 6.3, 18.8, 37.5),
-    ("B", "Reconocimiento y compensación", 24, 0.9, 12.5, 25.0, 41.7),
-]
-
-# ---------------------------------------------------------------------------
-# V1-Paso10: Baremos DIMENSIONES EXTRALABORAL A/B (Res. 2764)
-# ---------------------------------------------------------------------------
-BAREMO_DIM_EXTRA = [
-    # --- Forma A ---
-    ("A", "Balance entre la vida laboral y familiar", 16, 6.3, 25.0, 43.8, 62.5),
-    ("A", "Relaciones familiares", 12, 8.3, 25.0, 41.7, 58.3),
-    ("A", "Comunicación y relaciones interpersonales", 20, 0.9, 10.0, 20.0, 35.0),
-    ("A", "Situación económica del grupo familiar", 12, 8.3, 25.0, 41.7, 58.3),
-    ("A", "Características de la vivienda y de su entorno", 36, 5.6, 11.1, 19.4, 33.3),
-    ("A", "Influencia del entorno extralaboral sobre el trabajo", 12, 8.3, 16.7, 33.3, 50.0),
-    ("A", "Desplazamiento vivienda trabajo vivienda", 16, 0.9, 12.5, 31.3, 56.3),
-    # --- Forma B ---
-    ("B", "Balance entre la vida laboral y familiar", 16, 6.3, 25.0, 43.8, 62.5),
-    ("B", "Relaciones familiares", 12, 8.3, 25.0, 41.7, 58.3),
-    ("B", "Comunicación y relaciones interpersonales", 20, 5.0, 15.0, 25.0, 40.0),
-    ("B", "Situación económica del grupo familiar", 12, 16.7, 25.0, 41.7, 58.3),
-    ("B", "Características de la vivienda y de su entorno", 36, 5.6, 11.1, 19.4, 33.3),
-    ("B", "Influencia del entorno extralaboral sobre el trabajo", 12, 0.9, 16.7, 33.3, 50.0),
-    ("B", "Desplazamiento vivienda trabajo vivienda", 16, 0.9, 12.5, 31.3, 56.3),
-]
-
-# ---------------------------------------------------------------------------
-# V1-Paso11: Baremos DIMENSIONES INDIVIDUAL AVANTUM (afrontamiento + cap.psicológico)
-# Escala de PROTECCIÓN (1=muy bajo protección/vulnerabilidad alta, 5=muy alta protección)
-# ---------------------------------------------------------------------------
-BAREMO_DIM_INDIVIDUAL = [
-    # Afrontamiento — aplica A y B igual
-    ("AyB", "afrontamiento_activo_planificacion", 4, 29, 51, 69, 89),
-    ("AyB", "afrontamiento_pasivo_negacion", 4, 29, 51, 69, 89),
-    ("AyB", "afrontamiento_activo_busquedasoporte", 4, 29, 51, 69, 89),
-    # Capital psicológico — aplica A y B igual
-    ("AyB", "Optimismo", 3, 29, 51, 69, 89),
-    ("AyB", "Esperanza", 3, 29, 51, 69, 89),
-    ("AyB", "Resiliencia", 3, 29, 51, 69, 89),
-    ("AyB", "Autoeficacia", 3, 29, 51, 69, 89),
-]
-
-# ---------------------------------------------------------------------------
-# V1-Paso12: Baremos DOMINIOS INTRALABORAL A/B (Res. 2764)
-# ---------------------------------------------------------------------------
-BAREMO_DOMINIO_INTRA = [
-    ("A", "Demandas del trabajo", 200, 28.5, 35.0, 41.5, 50.5),
-    ("A", "Control sobre el trabajo", 84, 10.7, 19.0, 29.8, 42.9),
-    ("A", "Liderazgo y relaciones sociales en el trabajo", 164, 9.1, 17.7, 25.6, 36.6),
-    ("A", "Recompensas", 44, 4.5, 11.4, 20.5, 34.1),
-    ("B", "Demandas del trabajo", 156, 26.9, 33.3, 37.8, 46.8),
-    ("B", "Control sobre el trabajo", 72, 19.4, 26.4, 34.7, 47.2),
-    ("B", "Liderazgo y relaciones sociales en el trabajo", 120, 8.3, 17.5, 26.7, 40.0),
-    ("B", "Recompensas", 40, 2.5, 10.0, 17.5, 30.0),
-]
-
-# ---------------------------------------------------------------------------
-# V1-Paso13: Baremos DOMINIOS INDIVIDUAL AVANTUM
-# ---------------------------------------------------------------------------
-BAREMO_DOMINIO_INDIVIDUAL = [
-    ("AyB", "Estrategias de Afrontamiento", 4, 29, 51, 69, 89),
-    ("AyB", "Capital psicológico", 12, 29, 51, 69, 89),
-]
-
-# ---------------------------------------------------------------------------
-# V1-Paso14: Baremos FACTOR TOTAL (intra, extra, estrés) — Res. 2764
-# ---------------------------------------------------------------------------
-BAREMO_FACTOR = [
-    ("A", "Intralaboral", 492, 19.7, 25.8, 31.5, 38.8),
-    ("B", "Intralaboral", 388, 20.6, 26.0, 31.2, 38.7),
-    ("A", "Extralaboral", 124, 11.3, 16.9, 22.6, 29.0),
-    ("B", "Extralaboral", 124, 12.9, 17.7, 24.2, 32.3),
-    ("A", "Estres", 61.16, 7.8, 12.6, 14.7, 25.0),
-    ("B", "Estres", 61.16, 6.5, 11.8, 17.0, 23.4),
-]
-
-# ---------------------------------------------------------------------------
-# V1-Paso15: Baremos FACTOR INDIVIDUAL AVANTUM
-# ---------------------------------------------------------------------------
-BAREMO_FACTOR_INDIVIDUAL = [
-    ("A", "Individual", 24, 29, 51, 69, 89),
-    ("B", "Individual", 24, 29, 51, 69, 89),
-]
-
-
-# ===========================================================================
-# FUNCIONES DE CLASIFICACIÓN
-# ===========================================================================
-
-NIVELES_RIESGO = {
-    1: "Sin riesgo",
-    2: "Bajo",
-    3: "Medio",
-    4: "Alto",
-    5: "Muy alto",
-}
-
-NIVELES_PROTECCION = {
-    1: "Muy bajo",   # Alta vulnerabilidad
-    2: "Bajo",
-    3: "Medio",
-    4: "Alto",
-    5: "Muy alto",   # Alta protección
-}
-
-
-def clasificar_nivel(puntaje_transf: float, cortes: tuple, tipo: str = "riesgo") -> int:
+def clasificar_nivel(pt: float, tipo: str, c_sr: float, c_b: float, c_m: float, c_a: float) -> int:
     """
-    Clasifica un puntaje transformado en nivel 1-5.
-    
-    Args:
-        puntaje_transf: Puntaje transformado (0-100)
-        cortes: Tupla (sin_riesgo_max, bajo_max, medio_max, alto_max)
-        tipo: "riesgo" (mayor score = peor) o "proteccion" (mayor score = mejor)
-    Returns:
-        int 1-5
+    Clasifica puntaje_transformado en nivel 1-5.
+
+    Para 'riesgo':     nivel sube con el puntaje (más score = más riesgo)
+    Para 'proteccion': nivel sube con el puntaje (más score = más protección)
+    En ambos casos el esquema de cortes es el mismo (≤ corte → nivel):
+      ≤ corte_sin_riesgo → 1 | ≤ corte_bajo → 2 | ≤ corte_medio → 3 | ≤ corte_alto → 4 | else → 5
     """
-    if pd.isna(puntaje_transf):
-        return np.nan
-    
-    c1, c2, c3, c4 = cortes
-    
-    if tipo == "riesgo":
-        # Riesgo: mayor puntaje = peor nivel
-        if puntaje_transf <= c1:
-            return 1  # Sin riesgo
-        elif puntaje_transf <= c2:
-            return 2  # Bajo
-        elif puntaje_transf <= c3:
-            return 3  # Medio
-        elif puntaje_transf <= c4:
-            return 4  # Alto
-        else:
-            return 5  # Muy alto
-    else:
-        # Protección: mayor puntaje = mejor nivel
-        if puntaje_transf <= c1:
-            return 1  # Muy bajo (vulnerable)
-        elif puntaje_transf <= c2:
-            return 2  # Bajo
-        elif puntaje_transf <= c3:
-            return 3  # Medio
-        elif puntaje_transf <= c4:
-            return 4  # Alto
-        else:
-            return 5  # Muy alto (protegido)
+    if pd.isna(pt):
+        return 0  # indeterminado
+    if pt <= c_sr:
+        return 1
+    if pt <= c_b:
+        return 2
+    if pt <= c_m:
+        return 3
+    if pt <= c_a:
+        return 4
+    return 5
 
 
-def construir_lookup_baremos() -> pd.DataFrame:
-    """
-    Construye tabla lookup con todos los baremos.
-    Columnas: forma, nivel_analisis, nombre_nivel, transf_max, c1, c2, c3, c4, tipo_baremo
-    """
-    registros = []
-    
-    # Dimensiones intralaboral (riesgo)
-    for forma, dim, transf, c1, c2, c3, c4 in BAREMO_DIM_INTRA:
-        registros.append({
-            "forma": forma, "nivel_analisis": "dimension", "nombre_nivel": dim,
-            "factor": "Intralaboral", "transf_max": transf,
-            "c1": c1, "c2": c2, "c3": c3, "c4": c4, "tipo_baremo": "riesgo",
-        })
-    
-    # Dimensiones extralaboral (riesgo)
-    for forma, dim, transf, c1, c2, c3, c4 in BAREMO_DIM_EXTRA:
-        registros.append({
-            "forma": forma, "nivel_analisis": "dimension", "nombre_nivel": dim,
-            "factor": "Extralaboral", "transf_max": transf,
-            "c1": c1, "c2": c2, "c3": c3, "c4": c4, "tipo_baremo": "riesgo",
-        })
-    
-    # Dimensiones individual (protección)
-    for forma, dim, transf, c1, c2, c3, c4 in BAREMO_DIM_INDIVIDUAL:
-        registros.append({
-            "forma": forma, "nivel_analisis": "dimension", "nombre_nivel": dim,
-            "factor": "Individual", "transf_max": transf,
-            "c1": c1, "c2": c2, "c3": c3, "c4": c4, "tipo_baremo": "proteccion",
-        })
-    
-    # Dominios intralaboral (riesgo)
-    for forma, dom, transf, c1, c2, c3, c4 in BAREMO_DOMINIO_INTRA:
-        registros.append({
-            "forma": forma, "nivel_analisis": "dominio", "nombre_nivel": dom,
-            "factor": "Intralaboral", "transf_max": transf,
-            "c1": c1, "c2": c2, "c3": c3, "c4": c4, "tipo_baremo": "riesgo",
-        })
-    
-    # Dominios individual (protección)
-    for forma, dom, transf, c1, c2, c3, c4 in BAREMO_DOMINIO_INDIVIDUAL:
-        registros.append({
-            "forma": forma, "nivel_analisis": "dominio", "nombre_nivel": dom,
-            "factor": "Individual", "transf_max": transf,
-            "c1": c1, "c2": c2, "c3": c3, "c4": c4, "tipo_baremo": "proteccion",
-        })
-    
-    # Factor total (riesgo)
-    for forma, fac, transf, c1, c2, c3, c4 in BAREMO_FACTOR:
-        registros.append({
-            "forma": forma, "nivel_analisis": "factor", "nombre_nivel": fac,
-            "factor": fac, "transf_max": transf,
-            "c1": c1, "c2": c2, "c3": c3, "c4": c4, "tipo_baremo": "riesgo",
-        })
-    
-    # Factor individual (protección)
-    for forma, fac, transf, c1, c2, c3, c4 in BAREMO_FACTOR_INDIVIDUAL:
-        registros.append({
-            "forma": forma, "nivel_analisis": "factor", "nombre_nivel": fac,
-            "factor": fac, "transf_max": transf,
-            "c1": c1, "c2": c2, "c3": c3, "c4": c4, "tipo_baremo": "proteccion",
-        })
-    
-    return pd.DataFrame(registros)
+# ══════════════════════════════════════════════════════════════════════════════
+# Paso central: agregar por nivel y aplicar baremo
+# ══════════════════════════════════════════════════════════════════════════════
 
-
-# ===========================================================================
-# FUNCIONES DE CÁLCULO DE PUNTAJES
-# ===========================================================================
-
-def calcular_puntaje_bruto_dimension(df_scores: pd.DataFrame, cedula: str,
-                                      forma: str, dimension: str) -> float:
+def agregar_por_nivel(
+    fact: pd.DataFrame,
+    nivel_analisis: str,
+    nombre_col: str,
+) -> pd.DataFrame:
     """
-    Calcula puntaje bruto para una dimensión: suma de valor_invertido de sus ítems.
+    Agrupa fact_scores_brutos y calcula puntaje_bruto por nivel.
+
+    Parámetros
+    ----------
+    nivel_analisis : 'dimension' | 'dominio' | 'factor'
+    nombre_col     : columna en fact que identifica el nombre del grupo
+                     ('dimension', 'dominio', o 'instrumento' para factor)
+
+    Retorna DataFrame con columnas:
+      cedula, empresa, forma_intra, sector_rag, instrumento,
+      nivel_analisis, nombre_nivel, puntaje_bruto
     """
-    mask = (
-        (df_scores["cedula"] == cedula) &
-        (df_scores["forma_intra"].str.upper() == forma.upper()) &
-        (df_scores["dimension"] == dimension)
+    id_cols = ["cedula", "empresa", "forma_intra", "sector_rag", "instrumento"]
+    group_cols = id_cols + ([nombre_col] if nombre_col != "instrumento" else [])
+
+    agg = (
+        fact[fact[nombre_col].notna()]
+        .groupby(group_cols, dropna=False)["valor_invertido"]
+        .sum()
+        .reset_index(name="puntaje_bruto")
     )
-    return df_scores.loc[mask, "valor_invertido"].sum()
+    agg["nivel_analisis"] = nivel_analisis
+    agg["nombre_nivel"] = agg[nombre_col] if nombre_col != "instrumento" else agg["instrumento"]
+    return agg
 
 
-def calcular_puntaje_bruto_dominio(df_scores: pd.DataFrame, cedula: str,
-                                    forma: str, dominio: str) -> float:
+def calcular_dominio_afrontamiento_ponderado(fact: pd.DataFrame) -> pd.DataFrame:
     """
-    Calcula puntaje bruto para un dominio: suma de valor_invertido de sus ítems.
+    PASO 13 — Dominio Afrontamiento: media ponderada de las 3 subdimensiones.
+
+    Fórmula (Documento marco, Paso 13):
+      score = ((activo_planificacion × 0.25) + (busqueda_soporte × 0.25) + (pasivo_negacion × 0.50)) / 4 × 100
+
+    Las 3 subdimensiones vienen de la columna 'dimension' en fact_scores_brutos:
+      - 'Afrontamiento activo_planificación'  → peso 0.25
+      - 'Afrontamiento activo_busquedasoporte' → peso 0.25
+      - 'Afrontamiento evitativo_negación'    → peso 0.50  (ya invertido en Paso 2)
+
+    transformacion_max = 4, cortes protección: 29 | 51 | 69 | 89
     """
+    PESOS_AFRONTAMIENTO = {
+        "Afrontamiento activo_planificación":   0.25,
+        "Afrontamiento activo_busquedasoporte": 0.25,
+        "Afrontamiento evitativo_negación":     0.50,
+    }
+    CORTES_AFRONTAMIENTO = (29.0, 51.0, 69.0, 89.0)  # (c_sr, c_b, c_m, c_a)
+
+    id_cols = ["cedula", "empresa", "forma_intra", "sector_rag", "instrumento"]
+
+    # Filtrar solo ítems de afrontamiento
     mask = (
-        (df_scores["cedula"] == cedula) &
-        (df_scores["forma_intra"].str.upper() == forma.upper()) &
-        (df_scores["dominio"] == dominio)
+        fact["instrumento"].str.lower().str.contains("afrontamiento", na=False) &
+        fact["dimension"].isin(PESOS_AFRONTAMIENTO.keys())
     )
-    return df_scores.loc[mask, "valor_invertido"].sum()
+    afront = fact[mask].copy()
 
+    if afront.empty:
+        log.warning("Dominio Afrontamiento ponderado: sin datos de afrontamiento en fact_scores_brutos")
+        return pd.DataFrame()
 
-def calcular_puntaje_bruto_factor(df_scores: pd.DataFrame, cedula: str,
-                                   forma: str, factor: str) -> float:
-    """
-    Calcula puntaje bruto para un factor: suma de valor_invertido de sus ítems.
-    """
-    mask = (
-        (df_scores["cedula"] == cedula) &
-        (df_scores["forma_intra"].str.upper() == forma.upper()) &
-        (df_scores["factor"] == factor)
+    # Suma por subdimensión (puntaje_bruto de cada subdimensión)
+    sub = (
+        afront.groupby(id_cols + ["dimension"], dropna=False)["valor_invertido"]
+        .sum()
+        .reset_index(name="suma_sub")
     )
-    return df_scores.loc[mask, "valor_invertido"].sum()
+
+    # Aplicar peso a cada subdimensión
+    sub["peso"] = sub["dimension"].map(PESOS_AFRONTAMIENTO)
+    sub["suma_ponderada"] = sub["suma_sub"] * sub["peso"]
+
+    # Agregar al nivel dominio
+    dom = (
+        sub.groupby(id_cols, dropna=False)["suma_ponderada"]
+        .sum()
+        .reset_index(name="puntaje_bruto")
+    )
+
+    dom["nivel_analisis"] = "dominio"
+    dom["nombre_nivel"] = "Estrategias de Afrontamiento"
+    dom["tipo_baremo"] = "proteccion"
+    dom["transformacion_max"] = 4.0
+    dom["puntaje_transformado"] = (dom["puntaje_bruto"] / 4.0 * 100).round(2)
+
+    c_sr, c_b, c_m, c_a = CORTES_AFRONTAMIENTO
+    dom["nivel_riesgo"] = dom["puntaje_transformado"].apply(
+        lambda pt: clasificar_nivel(pt, "proteccion", c_sr, c_b, c_m, c_a)
+    )
+
+    log.info("Dominio Afrontamiento ponderado — %d filas calculadas", len(dom))
+    return dom
 
 
-def procesar_baremos_por_nivel(df_scores: pd.DataFrame, nivel_analisis: str) -> pd.DataFrame:
+def aplicar_baremo_a_df(
+    agg: pd.DataFrame,
+    dim_baremo: pd.DataFrame,
+    nivel_analisis: str,
+) -> pd.DataFrame:
     """
-    Procesa baremos para un nivel de análisis (dimension, dominio, factor).
-    Genera una fila por trabajador × nivel.
-    
-    Returns:
-        DataFrame con: cedula, empresa, forma_intra, sector_rag, nivel_analisis,
-                       nombre_nivel, puntaje_bruto, puntaje_transformado, nivel_riesgo, tipo_baremo
+    Hace JOIN con dim_baremo y calcula puntaje_transformado + nivel_riesgo.
+
+    dim_baremo debe tener columnas:
+      instrumento, nivel_analisis, nombre_nivel (o dimension),
+      transformacion_max, corte_sin_riesgo, corte_bajo, corte_medio, corte_alto,
+      tipo_baremo
     """
-    log.info("Procesando baremos nivel: %s", nivel_analisis)
-    
-    lookup = construir_lookup_baremos()
-    lookup_nivel = lookup[lookup["nivel_analisis"] == nivel_analisis]
-    
-    # Determinar columna de agrupación
-    if nivel_analisis == "dimension":
-        group_col = "dimension"
-    elif nivel_analisis == "dominio":
-        group_col = "dominio"
-    else:  # factor
-        group_col = "factor"
-    
-    # Agrupar por trabajador × forma × nivel
-    df_grouped = df_scores.groupby(
-        ["cedula", "empresa", "forma_intra", "sector_rag", group_col],
-        as_index=False
-    ).agg({"valor_invertido": "sum"})
-    df_grouped.rename(columns={"valor_invertido": "puntaje_bruto", group_col: "nombre_nivel"}, inplace=True)
-    df_grouped["nivel_analisis"] = nivel_analisis
-    
-    # Normalizar forma para lookup
-    df_grouped["forma_key"] = df_grouped["forma_intra"].str.upper()
-    
-    # JOIN con baremos
-    # Para Individual (AyB), hacer match con cualquier forma
-    resultados = []
-    for _, row in df_grouped.iterrows():
-        forma = row["forma_key"]
-        nombre = row["nombre_nivel"]
-        
-        # Buscar baremo: primero por forma específica, luego por AyB
-        baremo = lookup_nivel[
-            ((lookup_nivel["forma"] == forma) | (lookup_nivel["forma"] == "AyB")) &
-            (lookup_nivel["nombre_nivel"] == nombre)
-        ]
-        
-        if len(baremo) == 0:
-            # Dimensión/dominio sin baremo definido (ej: ítems especiales)
-            continue
-        
-        bar = baremo.iloc[0]
-        transf_max = bar["transf_max"]
-        puntaje_bruto = row["puntaje_bruto"]
-        puntaje_transf = (puntaje_bruto / transf_max) * 100 if transf_max > 0 else 0
-        cortes = (bar["c1"], bar["c2"], bar["c3"], bar["c4"])
-        nivel = clasificar_nivel(puntaje_transf, cortes, bar["tipo_baremo"])
-        
-        resultados.append({
-            "cedula": row["cedula"],
-            "empresa": row["empresa"],
-            "forma_intra": row["forma_intra"],
-            "sector_rag": row["sector_rag"],
-            "nivel_analisis": nivel_analisis,
-            "nombre_nivel": nombre,
-            "factor": bar["factor"],
-            "puntaje_bruto": puntaje_bruto,
-            "transf_max": transf_max,
-            "puntaje_transformado": round(puntaje_transf, 2),
-            "nivel_riesgo": nivel,
-            "tipo_baremo": bar["tipo_baremo"],
-        })
-    
-    df_result = pd.DataFrame(resultados)
-    log.info("  %s: %d registros generados", nivel_analisis, len(df_result))
-    return df_result
+    # Filtrar dim_baremo al nivel correcto
+    baremo_nivel = dim_baremo[dim_baremo["nivel_analisis"] == nivel_analisis].copy()
+
+    # Normalizar nombre de columna en dim_baremo
+    if "nombre_nivel" not in baremo_nivel.columns and "dimension" in baremo_nivel.columns:
+        baremo_nivel = baremo_nivel.rename(columns={"dimension": "nombre_nivel"})
+
+    join_cols = ["instrumento", "forma_intra", "nombre_nivel"] if nivel_analisis != "factor" else ["instrumento", "forma_intra"]
+
+    df = agg.merge(
+        baremo_nivel[join_cols + [
+            "transformacion_max", "corte_sin_riesgo", "corte_bajo",
+            "corte_medio", "corte_alto", "tipo_baremo",
+        ]].drop_duplicates(join_cols),
+        on=join_cols,
+        how="left",
+    )
+
+    # Rellenar tipo_baremo si no vino del baremo
+    df["tipo_baremo"] = df.apply(
+        lambda r: r["tipo_baremo"]
+        if pd.notna(r.get("tipo_baremo"))
+        else TIPO_BAREMO_DEFECTO.get(r["instrumento"], "riesgo"),
+        axis=1,
+    )
+
+    # Puntaje transformado: (bruto / max) * 100
+    df["puntaje_transformado"] = (
+        df["puntaje_bruto"] / df["transformacion_max"] * 100
+    ).round(2)
+
+    # Nivel 1-5
+    df["nivel_riesgo"] = df.apply(
+        lambda r: clasificar_nivel(
+            r["puntaje_transformado"],
+            r["tipo_baremo"],
+            r.get("corte_sin_riesgo", 0),
+            r.get("corte_bajo", 25),
+            r.get("corte_medio", 50),
+            r.get("corte_alto", 75),
+        ),
+        axis=1,
+    )
+
+    sin_baremo = df["transformacion_max"].isna().sum()
+    if sin_baremo > 0:
+        log.warning(
+            "[%s] %d combinaciones sin baremo (instrumento/nivel/forma sin coincidencia en dim_baremo)",
+            nivel_analisis, sin_baremo,
+        )
+
+    return df
 
 
-# ===========================================================================
-# VALIDACIÓN DE INTEGRIDAD
-# ===========================================================================
+# ══════════════════════════════════════════════════════════════════════════════
+# Validación (R14)
+# ══════════════════════════════════════════════════════════════════════════════
 
-def validar_scores_baremo(df: pd.DataFrame) -> Tuple[bool, pd.DataFrame]:
-    """
-    Valida integridad de fact_scores_baremo.
-    """
-    log.info("Validando fact_scores_baremo...")
+def validar_scores_baremo(df: pd.DataFrame) -> tuple[bool, pd.DataFrame]:
+    """Valida integridad de fact_scores_baremo."""
     errores = []
-    
-    # 1. PK sin duplicados
-    pk = ["cedula", "forma_intra", "nivel_analisis", "nombre_nivel"]
-    dupes = df[df.duplicated(subset=pk, keep=False)]
-    if len(dupes) > 0:
-        errores.append({
-            "check": "PK_duplicada",
-            "n": len(dupes),
-            "detalle": f"PKs duplicadas: {dupes[pk].head(3).to_dict()}",
-        })
-    
-    # 2. Niveles de riesgo válidos (1-5)
-    niveles_invalidos = df[(df["nivel_riesgo"] < 1) | (df["nivel_riesgo"] > 5)]
-    if len(niveles_invalidos) > 0:
-        errores.append({
-            "check": "nivel_riesgo_invalido",
-            "n": len(niveles_invalidos),
-            "detalle": f"Valores fuera de 1-5",
-        })
-    
-    # 3. Puntajes transformados en rango razonable
-    fuera_rango = df[(df["puntaje_transformado"] < 0) | (df["puntaje_transformado"] > 150)]
-    if len(fuera_rango) > 0:
-        errores.append({
-            "check": "puntaje_transf_fuera_rango",
-            "n": len(fuera_rango),
-            "detalle": f"Puntajes < 0 o > 150",
-        })
-    
-    # 4. Verificar formas válidas
-    formas = df["forma_intra"].str.upper().unique().tolist()
-    formas_invalidas = [f for f in formas if f not in ("A", "B")]
-    if formas_invalidas:
-        errores.append({
-            "check": "forma_invalida",
-            "n": len(formas_invalidas),
-            "detalle": f"Formas no reconocidas: {formas_invalidas}",
-        })
-    
-    # 5. Distribución de niveles — no puede ser todo nivel 1 o todo nivel 5
-    dist = df["nivel_riesgo"].value_counts(normalize=True)
-    if dist.get(1, 0) > 0.95 or dist.get(5, 0) > 0.95:
-        errores.append({
-            "check": "distribucion_sospechosa",
-            "n": 1,
-            "detalle": f"Distribución anómala: {dist.to_dict()}",
-        })
-    
-    df_errores = pd.DataFrame(errores)
-    es_valido = len(errores) == 0
-    if es_valido:
-        log.info("Validación EXITOSA — fact_scores_baremo integro")
-    else:
-        log.error("Validación FALLIDA — %d checks con errores", len(errores))
-        log.error(df_errores.to_string())
-    
-    return es_valido, df_errores
+
+    # PK sin duplicados
+    dup = df.duplicated(subset=["cedula", "forma_intra", "nivel_analisis", "nombre_nivel"]).sum()
+    if dup > 0:
+        errores.append({"check": "pk_duplicada", "n": int(dup)})
+
+    # Nulos en columnas clave
+    for col in ["cedula", "forma_intra", "nivel_analisis", "nombre_nivel",
+                "puntaje_bruto", "nivel_riesgo"]:
+        n = df[col].isna().sum()
+        if n > 0:
+            errores.append({"check": f"nulos_{col}", "n": int(n)})
+
+    # nivel_riesgo debe ser 1-5 (0 = indeterminado, permitido si hay NaN en scores)
+    fuera = df[(df["nivel_riesgo"] < 1) | (df["nivel_riesgo"] > 5)].shape[0]
+    if fuera > 0:
+        errores.append({"check": "nivel_riesgo_fuera_de_rango", "n": fuera})
+
+    # puntaje_transformado debe estar en [0, 100]
+    n_rango = df[
+        df["puntaje_transformado"].notna() &
+        ((df["puntaje_transformado"] < 0) | (df["puntaje_transformado"] > 100))
+    ].shape[0]
+    if n_rango > 0:
+        errores.append({"check": "pt_fuera_0_100", "n": n_rango})
+
+    reporte = pd.DataFrame(errores) if errores else pd.DataFrame(columns=["check", "n"])
+    return len(errores) == 0, reporte
 
 
-# ===========================================================================
-# PIPELINE PRINCIPAL
-# ===========================================================================
+# ══════════════════════════════════════════════════════════════════════════════
+# Main
+# ══════════════════════════════════════════════════════════════════════════════
 
-def main(config_path: str = "config/config.yaml") -> None:
+# ══════════════════════════════════════════════════════════════════════════════
+# Construcción interna de dim_baremo
+# Los baremos del Ministerio (Res. 2764/2022) son valores fijos.
+# transformacion_max se computa desde los datos reales (suma de max_item_score).
+# ADVERTENCIA: Los cortes (corte_sin_riesgo..corte_alto) son PLACEHOLDERS 20/40/60/80.
+# Deben ser reemplazados con los valores exactos del Manual Técnico del Ministerio.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Cortes estándar Ministerio por factor total (transformados 0-100)
+# Fuente: Manual Técnico Batería de Riesgo Psicosocial (Ministerio de Trabajo)
+CORTES_FACTOR: dict[str, tuple[float, float, float, float]] = {
+    # (corte_sin_riesgo, corte_bajo, corte_medio, corte_alto)
+    "IntraA":        (14.0, 27.0, 41.0, 59.0),
+    "IntraB":        (14.4, 31.4, 49.2, 74.5),
+    "Extralaboral":  (17.7, 30.6, 45.2, 63.7),
+    "Estres":        (23.1, 37.1, 57.1, 75.3),
+    "Afrontamiento": (29.0, 51.0, 69.0, 89.0),   # protección
+    "CapPsico":      (29.0, 51.0, 69.0, 89.0),   # protección (placeholder)
+}
+
+# Para dominios y dimensiones, usar placeholders.
+# TODO: reemplazar con cortes del Manual Técnico.
+CORTES_DEFAULT = (20.0, 40.0, 60.0, 80.0)
+
+
+def _construir_dim_baremo(fact: pd.DataFrame) -> pd.DataFrame:
     """
-    Pipeline principal 02b.
-    1. Carga fact_scores_brutos
-    2. Procesa baremos para dimensiones, dominios y factores
-    3. Concatena todos los niveles
-    4. Guarda fact_scores_baremo.parquet
-    5. Valida y reporta
+    Construye dim_baremo calculando transformacion_max desde los datos reales
+    (suma de max_item_score por grupo).
+
+    ADVERTENCIA: Los cortes de dominio y dimensión son PLACEHOLDERS (20/40/60/80).
+    Deben actualizarse con los valores del Manual Técnico del Ministerio.
     """
-    config   = cargar_config(config_path)
-    ruta_in  = Path(config["paths"]["processed"]) / "fact_scores_brutos.parquet"
-    ruta_out = Path(config["paths"]["processed"]) / "fact_scores_baremo.parquet"
-    
+    if "max_item_score" not in fact.columns:
+        log.warning("Columna 'max_item_score' ausente — usando transformacion_max=100 (placeholder)")
+        fact = fact.copy()
+        fact["max_item_score"] = 4.0
+
+    rows = []
+
+    # ── FACTOR level ─────────────────────────────────────────────────────────
+    fac_max = (
+        fact.groupby(["instrumento", "forma_intra"])["max_item_score"]
+        .sum()
+        .reset_index(name="transformacion_max")
+    )
+    for _, r in fac_max.iterrows():
+        inst = r["instrumento"]
+        forma = r["forma_intra"]
+        c_sr, c_b, c_m, c_a = CORTES_FACTOR.get(inst, CORTES_DEFAULT)
+        tipo = TIPO_BAREMO_DEFECTO.get(inst, "riesgo")
+        rows.append({
+            "instrumento": inst, "forma_intra": forma,
+            "nivel_analisis": "factor", "nombre_nivel": inst,
+            "transformacion_max": r["transformacion_max"],
+            "corte_sin_riesgo": c_sr, "corte_bajo": c_b,
+            "corte_medio": c_m, "corte_alto": c_a,
+            "tipo_baremo": tipo,
+        })
+
+    # ── DOMINIO level (cortes placeholder) ───────────────────────────────────
+    if "dominio" in fact.columns:
+        dom_max = (
+            fact[fact["dominio"].notna()]
+            .groupby(["instrumento", "forma_intra", "dominio"])["max_item_score"]
+            .sum()
+            .reset_index(name="transformacion_max")
+        )
+        for _, r in dom_max.iterrows():
+            inst = r["instrumento"]
+            tipo = TIPO_BAREMO_DEFECTO.get(inst, "riesgo")
+            c_sr, c_b, c_m, c_a = CORTES_DEFAULT
+            rows.append({
+                "instrumento": inst, "forma_intra": r["forma_intra"],
+                "nivel_analisis": "dominio", "nombre_nivel": r["dominio"],
+                "transformacion_max": r["transformacion_max"],
+                "corte_sin_riesgo": c_sr, "corte_bajo": c_b,
+                "corte_medio": c_m, "corte_alto": c_a,
+                "tipo_baremo": tipo,
+            })
+
+    # ── DIMENSION level (cortes placeholder) ─────────────────────────────────
+    if "dimension" in fact.columns:
+        dim_max = (
+            fact[fact["dimension"].notna()]
+            .groupby(["instrumento", "forma_intra", "dimension"])["max_item_score"]
+            .sum()
+            .reset_index(name="transformacion_max")
+        )
+        for _, r in dim_max.iterrows():
+            inst = r["instrumento"]
+            tipo = TIPO_BAREMO_DEFECTO.get(inst, "riesgo")
+            c_sr, c_b, c_m, c_a = CORTES_DEFAULT
+            rows.append({
+                "instrumento": inst, "forma_intra": r["forma_intra"],
+                "nivel_analisis": "dimension", "nombre_nivel": r["dimension"],
+                "transformacion_max": r["transformacion_max"],
+                "corte_sin_riesgo": c_sr, "corte_bajo": c_b,
+                "corte_medio": c_m, "corte_alto": c_a,
+                "tipo_baremo": tipo,
+            })
+
+    dim_baremo = pd.DataFrame(rows)
+    log.warning(
+        "dim_baremo construida con cortes PLACEHOLDER para dominios y dimensiones. "
+        "Reemplazar con cortes del Manual Técnico del Ministerio."
+    )
+    log.info("dim_baremo: %d filas", len(dim_baremo))
+    return dim_baremo
+
+
+def main():
     log.info("=" * 60)
-    log.info("02b_baremos.py — Iniciando pipeline")
-    log.info("Input:  %s", ruta_in)
-    log.info("Output: %s", ruta_out)
+    log.info("SCRIPT 02b — Baremos (Pasos 9-15)")
     log.info("=" * 60)
-    
-    # --- Carga
-    if not ruta_in.exists():
-        log.error("Archivo no encontrado: %s", ruta_in)
-        log.error("Ejecutar primero: 02a_scoring_bateria.py")
+
+    cfg = cargar_config()
+    proc = ROOT / cfg["paths"]["processed"]
+
+    # ── Cargar insumos ────────────────────────────────────────────────────────
+    fact = pd.read_parquet(proc / "fact_scores_brutos.parquet")
+    log.info("fact_scores_brutos: %d filas", len(fact))
+
+    # Construir dim_baremo internamente (no existe como hoja Excel)
+    dim_baremo = _construir_dim_baremo(fact)
+
+    # Asegurar que empresa y sector_rag estén en fact
+    for col in ["empresa", "sector_rag"]:
+        if col not in fact.columns:
+            log.warning("Columna '%s' ausente en fact_scores_brutos — se usará valor vacío", col)
+            fact[col] = None
+
+    # ── Calcular puntajes brutos por nivel ────────────────────────────────────
+    partes = []
+
+    # Pasos 9-11 — Dimensiones (intra A/B, extra, individual)
+    log.info("Pasos 9-11 — Dimensiones...")
+    dim_df = agregar_por_nivel(fact, "dimension", "dimension")
+    dim_df = aplicar_baremo_a_df(dim_df, dim_baremo, "dimension")
+    partes.append(dim_df)
+    log.info("  → %d filas de dimensiones", len(dim_df))
+
+    # Pasos 12-13 — Dominios (intra A/B + capital psicológico: suma simple)
+    log.info("Pasos 12-13 — Dominios (suma simple, excluye dominio Afrontamiento)...")
+    fact_sin_afrontamiento = fact[
+        ~fact["instrumento"].str.lower().str.contains("afrontamiento", na=False)
+    ]
+    dom_df = agregar_por_nivel(fact_sin_afrontamiento, "dominio", "dominio")
+    dom_df = aplicar_baremo_a_df(dom_df, dim_baremo, "dominio")
+    partes.append(dom_df)
+    log.info("  → %d filas de dominios (sin afrontamiento)", len(dom_df))
+
+    # Paso 13 — Dominio Afrontamiento: fórmula ponderada especial
+    log.info("Paso 13 — Dominio Afrontamiento (media ponderada 0.25/0.25/0.50)...")
+    dom_afrontamiento = calcular_dominio_afrontamiento_ponderado(fact)
+    if not dom_afrontamiento.empty:
+        partes.append(dom_afrontamiento)
+        log.info("  → %d filas de dominio Afrontamiento", len(dom_afrontamiento))
+
+    # Pasos 14-15 — Factores (intra A/B, extra, estrés, individual)
+    log.info("Pasos 14-15 — Factores...")
+    fac_df = agregar_por_nivel(fact, "factor", "instrumento")
+    fac_df = aplicar_baremo_a_df(fac_df, dim_baremo, "factor")
+    partes.append(fac_df)
+    log.info("  → %d filas de factores", len(fac_df))
+
+    # ── Consolidar todos los niveles ─────────────────────────────────────────
+    cols_output = [
+        "cedula", "empresa", "forma_intra", "sector_rag",
+        "instrumento", "nivel_analisis", "nombre_nivel",
+        "puntaje_bruto", "puntaje_transformado",
+        "nivel_riesgo", "tipo_baremo",
+    ]
+    fact_baremo = pd.concat(partes, ignore_index=True)
+    fact_baremo_out = fact_baremo[[c for c in cols_output if c in fact_baremo.columns]]
+
+    # ── Validación (R14) ────────────────────────────────────────────────────
+    es_valido, reporte = validar_scores_baremo(fact_baremo_out)
+    if not es_valido:
+        log.error("Validación FALLIDA:\n%s", reporte.to_string())
         sys.exit(1)
-    
-    df_scores = pd.read_parquet(ruta_in)
-    log.info("Cargados %d registros × %d columnas", len(df_scores), df_scores.shape[1])
-    log.info("Trabajadores únicos: %d", df_scores["cedula"].nunique())
-    log.info("Formas: %s", df_scores["forma_intra"].str.upper().unique().tolist())
-    
-    # Validar columnas requeridas
-    cols_req = ["cedula", "empresa", "forma_intra", "sector_rag", "dimension", "dominio", "factor", "valor_invertido"]
-    faltantes = [c for c in cols_req if c not in df_scores.columns]
-    if faltantes:
-        log.error("Columnas faltantes en fact_scores_brutos: %s", faltantes)
-        sys.exit(1)
-    
-    # --- Procesar baremos por nivel de análisis
-    df_dimensiones = procesar_baremos_por_nivel(df_scores, "dimension")
-    df_dominios    = procesar_baremos_por_nivel(df_scores, "dominio")
-    df_factores    = procesar_baremos_por_nivel(df_scores, "factor")
-    
-    # --- Concatenar todos los niveles
-    df_baremo = pd.concat([df_dimensiones, df_dominios, df_factores], ignore_index=True)
-    log.info("Total registros fact_scores_baremo: %d", len(df_baremo))
-    
-    # --- Agregar etiquetas de nivel
-    def etiquetar_nivel(row):
-        nivel = row["nivel_riesgo"]
-        if pd.isna(nivel):
-            return np.nan
-        nivel = int(nivel)
-        if row["tipo_baremo"] == "proteccion":
-            return NIVELES_PROTECCION.get(nivel, "Desconocido")
-        return NIVELES_RIESGO.get(nivel, "Desconocido")
-    
-    df_baremo["nivel_etiqueta"] = df_baremo.apply(etiquetar_nivel, axis=1)
-    
-    # --- Guardar
-    ruta_out.parent.mkdir(parents=True, exist_ok=True)
-    df_baremo.to_parquet(ruta_out, index=False)
-    log.info("Guardado: %s (%d filas × %d cols)", ruta_out, len(df_baremo), df_baremo.shape[1])
-    
-    # --- Validación final
-    ok, df_err = validar_scores_baremo(df_baremo)
-    if not ok:
-        log.error("Pipeline 02b completado con ERRORES — revisar validación")
-        sys.exit(1)
-    
-    # --- Resumen estadístico
-    log.info("-" * 40)
-    log.info("RESUMEN FACT_SCORES_BAREMO:")
-    log.info("  Total registros      : %d", len(df_baremo))
-    log.info("  Trabajadores únicos  : %d", df_baremo["cedula"].nunique())
-    log.info("  Niveles de análisis  : %s", df_baremo["nivel_analisis"].unique().tolist())
-    
-    # Distribución por tipo de baremo
-    log.info("  Por tipo_baremo:")
-    for tipo in ["riesgo", "proteccion"]:
-        df_tipo = df_baremo[df_baremo["tipo_baremo"] == tipo]
-        if len(df_tipo) > 0:
-            dist = df_tipo["nivel_riesgo"].value_counts().sort_index()
-            log.info("    %s: %s", tipo, dist.to_dict())
-    
-    # Distribución por nivel de riesgo (general)
-    log.info("  Distribución niveles:")
-    dist_global = df_baremo["nivel_etiqueta"].value_counts()
-    for etiq, n in dist_global.items():
-        log.info("    %s: %d (%.1f%%)", etiq, n, 100 * n / len(df_baremo))
-    
-    log.info("-" * 40)
-    log.info("02b completado exitosamente.")
+    log.info("Validación OK")
+
+    # ── Resumen por instrumento y nivel ────────────────────────────────────
+    resumen = (
+        fact_baremo_out[fact_baremo_out["nivel_analisis"] == "factor"]
+        .groupby(["instrumento", "nivel_riesgo"])["cedula"]
+        .count()
+        .reset_index(name="n")
+    )
+    log.info("Distribución por instrumento (nivel factor):\n%s", resumen.to_string(index=False))
+
+    # ── Guardar (R13) ───────────────────────────────────────────────────────
+    out = proc / "fact_scores_baremo.parquet"
+    fact_baremo_out.to_parquet(out, index=False)
+    log.info("Guardado: %s (%d filas × %d columnas)", out, *fact_baremo_out.shape)
+
+    log.info("=" * 60)
+    log.info("Pasos 9-15 completados → fact_scores_baremo.parquet")
+    log.info("=" * 60)
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="02b_baremos.py — V1 Pasos 9-15")
-    parser.add_argument("--config", default="config/config.yaml",
-                        help="Ruta al archivo config.yaml")
-    args = parser.parse_args()
-    main(config_path=args.config)
+    main()

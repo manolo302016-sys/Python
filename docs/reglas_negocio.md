@@ -257,22 +257,65 @@ NUNCA mezclar facts y dims en el mismo archivo.
 
 ### R17 — Sector homologación obligatoria
 ```
-SIEMPRE normalizar sector_economico → sector_rag en el ETL:
-  'Comercio' → 'Comercio/financiero'  (ÚNICO cambio de nombre)
-  Los demás sectores mantienen su nombre.
+SIEMPRE normalizar sector_economico → sector_rag en 01_etl_star_schema.py.
+El SECTOR_MAP contiene 30+ aliases cubriendo todos los sectores ENCST + variantes
+de escritura comunes (mayúsculas, tildes, abreviaturas).
 
-Si aparecen nuevos sectores no mapeados:
-  → WARNING en logs
-  → sector_rag = 'No clasificado'
-  → NO romper el pipeline
+Sectores destino válidos (10):
+  Agricultura | Manufactura | Servicios | Construcción | Comercio/financiero
+  Transporte | Minas y canteras | Administración pública | Educación | Salud
+
+Reglas de mapeo:
+  - Alias conocido → sector destino del SECTOR_MAP
+  - No mapeado → WARNING en logs + sector_rag = 'No clasificado'
+  - 'No clasificado' usa benchmark del promedio general (39.69%)
+  - 'Transporte' usa benchmark de 'Servicios' (37.20%) por ausencia en ENCST
+  - El pipeline NUNCA rompe por sector desconocido (R18)
+
+OBLIGATORIO: Agregar nuevos aliases al SECTOR_MAP cuando aparezcan sectores
+  no reconocidos — NO hardcodear correcciones en otros scripts.
 ```
 
 ### R18 — Escalabilidad del pipeline
 ```
 El pipeline está diseñado para N empresas (no solo una).
 Todos los scripts deben funcionar para el universo completo.
-Los dashboards filtran por empresa en el frontend.
+Los dashboards filtran por empresa en el frontend (JS dropdown en HTML estático).
 
 NO crear scripts separados por empresa.
 NO hardcodear nombres de empresas en los scripts.
+```
+
+### R19 — Dashboards HTML estático (sin servidor)
+```
+Los 4 dashboards se exportan como archivos HTML autocontenidos.
+NO se usa Dash, FastAPI ni ningún servidor web.
+
+Exportación obligatoria:
+  plotly.io.write_html(fig, full_html=True, include_plotlyjs='cdn')
+
+Interactividad: Plotly nativo + JavaScript vanilla para filtros (empresa, forma A/B).
+Canvas: 3000×2000 px, orientación vertical, una sola página por dashboard.
+Apertura: doble clic en el archivo .html → cualquier navegador moderno.
+
+Filtros JS: Se generan bloques HTML por combinación empresa×forma;
+  JavaScript muestra/oculta bloques según selección del dropdown.
+  No requiere backend ni CORS.
+```
+
+### R20 — Documento marco como fuente de verdad
+```
+docs/Documento marco.md es la ÚNICA fuente de verdad para:
+  - Reglas de scoring y baremos
+  - Mapeos ítem → dimensión → dominio → factor
+  - Fórmulas de cálculo
+  - Definiciones de secciones de dashboards
+
+En caso de contradicción entre docs/:
+  Documento marco.md > pipeline.md > reglas_negocio.md > agents.md > otros
+
+OBLIGATORIO antes de codificar cualquier paso:
+  1. Validar la regla en Documento marco.md
+  2. Verificar coherencia con todos los otros docs
+  3. Corregir los docs que contradigan el marco ANTES de escribir código
 ```

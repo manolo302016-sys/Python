@@ -1,391 +1,296 @@
 """
-07_frecuencias_preguntas.py — Implementa V1-Paso 20: Frecuencias por Pregunta
+07_frecuencias_preguntas.py
+===========================
+Paso 20 del pipeline V1 — Distribución de frecuencias por pregunta + Top 20 comparables Colombia.
 
-Calcula la distribución de respuestas (frecuencias) para cada pregunta
-de los cuestionarios, permitiendo análisis detallado a nivel de ítem.
+Proceso:
+  A) Frecuencias generales: para cada id_pregunta × empresa × forma_intra
+     calcular % de personas que eligieron cada opción de respuesta.
 
-Input:
-  - data/processed/fact_respuestas_clean.parquet (respuestas codificadas)
-  - data/raw/dim_preguntas.parquet (catálogo de preguntas)
+  B) Comparables Colombia (39 preguntas):
+     - Discriminadas por forma: trabajadores A usan id_pregunta_A, trabajadores B usan id_pregunta_B
+     - Fórmula alta presencia:
+         intra/extra/estres → siempre + casi siempre
+         afrontamiento      → frecuentemente hago eso + siempre hago eso
+     - diferencia_pp = pct_empresa - pct_pais_encst
+     - Top 20: las 20 primeras con diferencia_pp > 0, ordenadas desc por empresa
 
-Output:
-  - data/processed/fact_frecuencias.parquet
+Output: data/processed/fact_frecuencias.parquet
+        data/processed/fact_top20_comparables.parquet
 
-Contenido del output:
-  - Por cada pregunta: conteo y % de cada opción de respuesta
-  - Agrupado por empresa, factor, dimensión
-  - Identificación de preguntas críticas (alto % en respuestas negativas)
-
-Fuente documental: Visualizador 1, Paso 20
-Versión: 1.0 | Pipeline MentalPRO | Modelo AVANTUM
+Reglas:
+  R8  — Grupos < 5 → pct marcado como None (confidencialidad)
+  R13 — Output Parquet
 """
 
 import logging
 import sys
 from pathlib import Path
-from typing import Tuple, Dict, List
-import numpy as np
+
 import pandas as pd
 import yaml
 
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = ROOT / "config" / "config.yaml"
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
-log = logging.getLogger("07_frecuencias_preguntas")
+log = logging.getLogger(__name__)
 
 
-def cargar_config(config_path: str = "config/config.yaml") -> dict:
-    with open(config_path, "r", encoding="utf-8") as f:
+# ══════════════════════════════════════════════════════════════════════════════
+# Tabla de 39 preguntas comparables con Colombia
+# Fuente: Documento marco, Paso 20 — Fuente ENCST II y III (2013-2021)
+#
+# Estructura: (id_pregunta_A, id_pregunta_B, dimension, pct_pais, tipo_formula)
+#   tipo_formula:
+#     'likert'        → siempre + casi siempre
+#     'afrontamiento' → frecuentemente hago eso + siempre hago eso
+# ══════════════════════════════════════════════════════════════════════════════
+PREGUNTAS_COMPARABLES: list[dict] = [
+    # id_preg_A             id_preg_B            dimension                                   pct_pais  formula
+    {"A": "11_afrontamiento", "B": "11_afrontamiento", "dim": "Autoeficacia",                              "pct": 95.2, "formula": "afrontamiento"},
+    {"A": "61_intra",         "B": "47_intra",         "dim": "Capacitación",                             "pct": 87.9, "formula": "likert"},
+    {"A": "65_intra",         "B": "50_intra",         "dim": "Características del liderazgo",            "pct": 54.4, "formula": "likert"},
+    {"A": "75_intra",         "B": "61_intra",         "dim": "Características del liderazgo",            "pct": 94.5, "formula": "likert"},
+    {"A": "58_intra",         "B": "58_intra",         "dim": "Características del liderazgo",            "pct": 14.6, "formula": "likert"},
+    {"A": "53_intra",         "B": "41_intra",         "dim": "Claridad de rol",                          "pct": 95.8, "formula": "likert"},
+    {"A": "59_intra",         "B": "45_intra",         "dim": "Claridad de rol",                          "pct": 21.8, "formula": "likert"},
+    {"A": "55_intra",         "B": "43_intra",         "dim": "Claridad de rol",                          "pct": 19.1, "formula": "likert"},
+    {"A": "46_intra",         "B": "36_intra",         "dim": "Control y autonomía sobre el trabajo",     "pct": 81.9, "formula": "likert"},
+    {"A": "45_intra",         "B": "35_intra",         "dim": "Control y autonomía sobre el trabajo",     "pct": 82.3, "formula": "likert"},
+    {"A": "13_intra",         "B": "13_intra",         "dim": "Demandas cuantitativas",                   "pct": 33.3, "formula": "likert"},
+    {"A": "14_intra",         "B": "14_intra",         "dim": "Demandas cuantitativas",                   "pct": 16.2, "formula": "likert"},
+    {"A": "15_intra",         "B": "15_intra",         "dim": "Demandas cuantitativas",                   "pct": 62.5, "formula": "likert"},
+    {"A": "13_intra",         "B": "13_intra",         "dim": "Demandas cuantitativas",                   "pct": 51.5, "formula": "likert"},  # 2ª ref ENCST
+    {"A": "17_intra",         "B": "17_intra",         "dim": "Demandas de carga mental",                 "pct": 72.5, "formula": "likert"},
+    {"A": "20_intra",         "B": None,               "dim": "Demandas de carga mental",                 "pct": 53.4, "formula": "likert"},
+    {"A": "21_intra",         "B": "20_intra",         "dim": "Demandas de carga mental",                 "pct": 37.3, "formula": "likert"},
+    {"A": "113_intra",        "B": None,               "dim": "Demandas emocionales",                     "pct": 34.4, "formula": "likert"},
+    {"A": "6_extra",          "B": "6_extra",          "dim": "Características de la vivienda y de su entorno", "pct": 17.8, "formula": "likert"},
+    {"A": "17_extra",         "B": "17_extra",         "dim": "Balance entre la vida laboral y familiar", "pct": 90.1, "formula": "likert"},
+    {"A": "3_extra",          "B": "3_extra",          "dim": "Desplazamiento vivienda trabajo vivienda",  "pct": 46.9, "formula": "likert"},
+    {"A": "40_intra",         "B": "31_intra",         "dim": "Oportunidades para el uso y desarrollo de habilidades y conocimientos", "pct": 91.7, "formula": "likert"},
+    {"A": "41_intra",         "B": "32_intra",         "dim": "Oportunidades para el uso y desarrollo de habilidades y conocimientos", "pct": 87.5, "formula": "likert"},
+    {"A": None,               "B": "29_intra",         "dim": "Oportunidades para el uso y desarrollo de habilidades y conocimientos", "pct": 66.8, "formula": "likert"},
+    {"A": "2_afrontamiento",  "B": "2_afrontamiento",  "dim": "Optimismo",                                "pct": 95.5, "formula": "afrontamiento"},
+    {"A": "103_intra",        "B": "86_intra",         "dim": "Recompensas derivadas de la pertenencia a la organización y del trabajo que se realiza", "pct": 94.7, "formula": "likert"},
+    {"A": "87_intra",         "B": "71_intra",         "dim": "Relaciones sociales en el trabajo",        "pct": 96.2, "formula": "likert"},
+    {"A": "88_intra",         "B": "72_intra",         "dim": "Relaciones sociales en el trabajo",        "pct": 96.6, "formula": "likert"},
+    {"A": "80_intra",         "B": "66_intra",         "dim": "Relaciones sociales en el trabajo",        "pct":  4.9, "formula": "likert"},
+    {"A": "118_intra",        "B": None,               "dim": "Relación con los colaboradores (subordinados)", "pct": 5.1, "formula": "likert"},
+    {"A": "8_afrontamiento",  "B": "8_afrontamiento",  "dim": "Resiliencia",                              "pct": 96.9, "formula": "afrontamiento"},
+    {"A": "21_estres",        "B": "21_estres",        "dim": "Respuestas cognitivas de estrés",          "pct":  2.9, "formula": "likert"},
+    {"A": "13_estres",        "B": "13_estres",        "dim": "Respuestas comportamentales de estrés",    "pct": 39.4, "formula": "likert"},
+    {"A": "25_estres",        "B": "25_estres",        "dim": "Respuestas emocionales de estrés",         "pct": 40.2, "formula": "likert"},
+    {"A": "12_estres",        "B": "12_estres",        "dim": "Respuestas emocionales de estrés",         "pct": 33.9, "formula": "likert"},
+    {"A": "31_estres",        "B": "31_estres",        "dim": "Respuestas emocionales de estrés",         "pct":  8.6, "formula": "likert"},
+    {"A": "27_estres",        "B": "27_estres",        "dim": "Respuestas emocionales de estrés",         "pct":  2.7, "formula": "likert"},
+    {"A": "5_estres",         "B": "5_estres",         "dim": "Respuestas físicas de estrés",             "pct": 30.1, "formula": "likert"},
+    {"A": "1_estres",         "B": "1_estres",         "dim": "Respuestas físicas de estrés",             "pct": 31.8, "formula": "likert"},
+]
+
+# Respuestas que cuentan como "alta presencia" por tipo de fórmula
+ALTA_PRESENCIA_LIKERT = {"siempre", "casi siempre"}
+ALTA_PRESENCIA_AFRONTAMIENTO = {"frecuentemente hago eso", "siempre hago eso"}
+
+
+def cargar_config() -> dict:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-# ===========================================================================
-# CONSTANTES
-# ===========================================================================
+# ══════════════════════════════════════════════════════════════════════════════
+# Parte A — Frecuencias generales
+# ══════════════════════════════════════════════════════════════════════════════
 
-# Opciones de respuesta por tipo de escala
-OPCIONES_LIKERT = ["Siempre", "Casi siempre", "Algunas veces", "Casi nunca", "Nunca"]
-OPCIONES_DICOTOMICA = ["Sí", "No"]
-OPCIONES_AFRONTAMIENTO = ["Siempre", "Frecuentemente", "A veces", "Nunca"]
-
-# Umbral para marcar pregunta como crítica (% en opciones negativas)
-UMBRAL_CRITICO_PCT = 40
-
-# Opciones consideradas "negativas" por tipo de escala
-# (depende de si el ítem es invertido o no, pero por defecto)
-OPCIONES_NEGATIVAS_LIKERT = ["Siempre", "Casi siempre"]  # Para ítems de riesgo
-OPCIONES_NEGATIVAS_LIKERT_INV = ["Nunca", "Casi nunca"]  # Para ítems protectores
-
-
-# ===========================================================================
-# FUNCIONES DE CÁLCULO DE FRECUENCIAS
-# ===========================================================================
-
-def calcular_frecuencias_pregunta(
-    df: pd.DataFrame,
-    id_pregunta: str,
-    grupo_cols: List[str] = None
+def calcular_frecuencias_generales(
+    fact: pd.DataFrame, n_min: int
 ) -> pd.DataFrame:
     """
-    Calcula frecuencias de respuesta para una pregunta.
-    
-    Args:
-        df: DataFrame con respuestas (debe tener columna 'respuesta_texto')
-        id_pregunta: ID de la pregunta a analizar
-        grupo_cols: Columnas para agrupar (ej: ['empresa', 'factor'])
-    
-    Returns:
-        DataFrame con conteo y % por opción de respuesta
+    Para cada empresa × id_pregunta × forma_intra × opcion_respuesta:
+    calcula n_personas y pct_empresa.
+    Aplica R8: pct=None si n_total_pregunta < n_min.
     """
-    df_preg = df[df["id_pregunta"] == id_pregunta].copy()
-    
-    if len(df_preg) == 0:
-        return pd.DataFrame()
-    
-    if grupo_cols is None:
-        grupo_cols = ["empresa"]
-    
-    # Contar respuestas por grupo y opción
-    df_freq = df_preg.groupby(grupo_cols + ["respuesta_texto"]).size().reset_index(name="conteo")
-    
-    # Calcular total por grupo para obtener porcentajes
-    df_total = df_preg.groupby(grupo_cols).size().reset_index(name="total")
-    df_freq = df_freq.merge(df_total, on=grupo_cols)
-    
-    # Calcular porcentaje
-    df_freq["porcentaje"] = (df_freq["conteo"] / df_freq["total"] * 100).round(1)
-    
-    # Agregar metadata de la pregunta
-    df_freq["id_pregunta"] = id_pregunta
-    
-    return df_freq
+    group_cols = ["empresa", "forma_intra", "id_pregunta", "id_respuesta"]
 
-
-def calcular_frecuencias_todas(
-    df_respuestas: pd.DataFrame,
-    df_preguntas: pd.DataFrame,
-    grupo_cols: List[str] = None
-) -> pd.DataFrame:
-    """
-    Calcula frecuencias para todas las preguntas.
-    
-    Args:
-        df_respuestas: DataFrame con todas las respuestas
-        df_preguntas: Catálogo de preguntas con metadata
-        grupo_cols: Columnas para agrupar
-    
-    Returns:
-        DataFrame consolidado con frecuencias de todas las preguntas
-    """
-    log.info("Calculando frecuencias por pregunta...")
-    
-    if grupo_cols is None:
-        grupo_cols = ["empresa", "factor"]
-    
-    preguntas = df_respuestas["id_pregunta"].unique()
-    log.info("  Procesando %d preguntas", len(preguntas))
-    
-    all_freqs = []
-    for id_preg in preguntas:
-        df_freq = calcular_frecuencias_pregunta(df_respuestas, id_preg, grupo_cols)
-        if len(df_freq) > 0:
-            all_freqs.append(df_freq)
-    
-    if not all_freqs:
-        return pd.DataFrame()
-    
-    df_result = pd.concat(all_freqs, ignore_index=True)
-    
-    # Enriquecer con metadata de preguntas
-    if len(df_preguntas) > 0:
-        cols_meta = ["id_pregunta", "texto_pregunta", "dimension", "dominio", "es_invertido"]
-        cols_disponibles = [c for c in cols_meta if c in df_preguntas.columns]
-        df_result = df_result.merge(
-            df_preguntas[cols_disponibles].drop_duplicates(),
-            on="id_pregunta",
-            how="left"
-        )
-    
-    log.info("  Generadas %d filas de frecuencias", len(df_result))
-    return df_result
-
-
-# ===========================================================================
-# IDENTIFICACIÓN DE PREGUNTAS CRÍTICAS
-# ===========================================================================
-
-def identificar_preguntas_criticas(
-    df_freq: pd.DataFrame,
-    umbral_pct: float = UMBRAL_CRITICO_PCT
-) -> pd.DataFrame:
-    """
-    Identifica preguntas con alto % de respuestas negativas.
-    
-    Una pregunta es crítica si:
-    - Para ítems de riesgo: >umbral% en "Siempre" + "Casi siempre"
-    - Para ítems protectores (invertidos): >umbral% en "Nunca" + "Casi nunca"
-    
-    Args:
-        df_freq: DataFrame con frecuencias calculadas
-        umbral_pct: Umbral porcentual para marcar como crítico
-    
-    Returns:
-        DataFrame con preguntas críticas y su % en opciones negativas
-    """
-    log.info("Identificando preguntas críticas (umbral: %.0f%%)...", umbral_pct)
-    
-    # Determinar opciones negativas según si es invertido
-    def es_respuesta_negativa(row):
-        if row.get("es_invertido", False):
-            return row["respuesta_texto"] in OPCIONES_NEGATIVAS_LIKERT_INV
-        else:
-            return row["respuesta_texto"] in OPCIONES_NEGATIVAS_LIKERT
-    
-    df = df_freq.copy()
-    df["es_negativa"] = df.apply(es_respuesta_negativa, axis=1)
-    
-    # Sumar % de opciones negativas por pregunta y grupo
-    grupo_cols = ["empresa", "factor", "id_pregunta"]
-    cols_presentes = [c for c in grupo_cols if c in df.columns]
-    
-    df_neg = df[df["es_negativa"]].groupby(cols_presentes)["porcentaje"].sum().reset_index()
-    df_neg = df_neg.rename(columns={"porcentaje": "pct_negativo"})
-    
-    # Filtrar críticas
-    df_criticas = df_neg[df_neg["pct_negativo"] >= umbral_pct].copy()
-    df_criticas["es_critica"] = True
-    
-    # Enriquecer con texto de pregunta
-    if "texto_pregunta" in df_freq.columns:
-        df_texto = df_freq[["id_pregunta", "texto_pregunta", "dimension", "dominio"]].drop_duplicates()
-        df_criticas = df_criticas.merge(df_texto, on="id_pregunta", how="left")
-    
-    log.info("  Encontradas %d preguntas críticas", len(df_criticas))
-    return df_criticas
-
-
-def generar_resumen_por_dimension(df_freq: pd.DataFrame) -> pd.DataFrame:
-    """
-    Genera resumen de frecuencias agregado por dimensión.
-    
-    Para cada dimensión calcula:
-    - Promedio de % en opciones negativas
-    - Número de preguntas críticas
-    - Pregunta más crítica
-    """
-    if "dimension" not in df_freq.columns:
-        return pd.DataFrame()
-    
-    # Calcular % negativo por pregunta
-    def es_respuesta_negativa(row):
-        if row.get("es_invertido", False):
-            return row["respuesta_texto"] in OPCIONES_NEGATIVAS_LIKERT_INV
-        else:
-            return row["respuesta_texto"] in OPCIONES_NEGATIVAS_LIKERT
-    
-    df = df_freq.copy()
-    df["es_negativa"] = df.apply(es_respuesta_negativa, axis=1)
-    
-    grupo_cols = ["empresa", "dimension", "id_pregunta"]
-    cols_presentes = [c for c in grupo_cols if c in df.columns]
-    
-    df_neg = df[df["es_negativa"]].groupby(cols_presentes)["porcentaje"].sum().reset_index()
-    df_neg = df_neg.rename(columns={"porcentaje": "pct_negativo"})
-    
-    # Agregar por dimensión
-    df_dim = df_neg.groupby(["empresa", "dimension"]).agg({
-        "pct_negativo": ["mean", "max"],
-        "id_pregunta": "count"
-    }).reset_index()
-    df_dim.columns = ["empresa", "dimension", "pct_negativo_promedio", "pct_negativo_max", "n_preguntas"]
-    
-    # Contar críticas
-    df_criticas = df_neg[df_neg["pct_negativo"] >= UMBRAL_CRITICO_PCT]
-    df_count_crit = df_criticas.groupby(["empresa", "dimension"]).size().reset_index(name="n_criticas")
-    
-    df_dim = df_dim.merge(df_count_crit, on=["empresa", "dimension"], how="left")
-    df_dim["n_criticas"] = df_dim["n_criticas"].fillna(0).astype(int)
-    
-    return df_dim
-
-
-# ===========================================================================
-# VALIDACIÓN
-# ===========================================================================
-
-def validar_frecuencias(df: pd.DataFrame) -> Tuple[bool, List[str]]:
-    """Valida cálculos de frecuencias."""
-    log.info("Validando frecuencias...")
-    errores = []
-    
-    # 1. Porcentajes suman ~100 por pregunta y grupo
-    grupo_cols = ["empresa", "factor", "id_pregunta"]
-    cols_presentes = [c for c in grupo_cols if c in df.columns]
-    
-    df_sum = df.groupby(cols_presentes)["porcentaje"].sum()
-    fuera_rango = df_sum[(df_sum < 99) | (df_sum > 101)]
-    if len(fuera_rango) > 0:
-        errores.append(f"Porcentajes no suman 100 en {len(fuera_rango)} grupos")
-    
-    # 2. No hay porcentajes negativos
-    if (df["porcentaje"] < 0).any():
-        errores.append("Porcentajes negativos encontrados")
-    
-    # 3. Todas las preguntas tienen al menos una respuesta
-    preguntas_vacias = df.groupby("id_pregunta")["conteo"].sum()
-    if (preguntas_vacias == 0).any():
-        errores.append("Preguntas sin respuestas encontradas")
-    
-    es_valido = len(errores) == 0
-    if es_valido:
-        log.info("Validación EXITOSA")
-    else:
-        log.error("Validación FALLIDA: %s", errores)
-    return es_valido, errores
-
-
-# ===========================================================================
-# PIPELINE PRINCIPAL
-# ===========================================================================
-
-def main(config_path: str = "config/config.yaml") -> None:
-    """
-    Pipeline principal 07.
-    1. Carga fact_respuestas_clean y dim_preguntas
-    2. Calcula frecuencias por pregunta y grupo
-    3. Identifica preguntas críticas
-    4. Genera resumen por dimensión
-    5. Guarda fact_frecuencias.parquet
-    """
-    config = cargar_config(config_path)
-    raw_path = Path(config["paths"]["raw"])
-    proc_path = Path(config["paths"]["processed"])
-    
-    log.info("=" * 60)
-    log.info("07_frecuencias_preguntas.py — Iniciando pipeline (V1-Paso20)")
-    log.info("=" * 60)
-    
-    # --- Carga
-    ruta_respuestas = proc_path / "fact_respuestas_clean.parquet"
-    ruta_preguntas = raw_path / "dim_preguntas.parquet"
-    
-    if not ruta_respuestas.exists():
-        log.error("Archivo no encontrado: %s", ruta_respuestas)
-        sys.exit(1)
-    
-    df_respuestas = pd.read_parquet(ruta_respuestas)
-    log.info("Cargadas %d respuestas", len(df_respuestas))
-    
-    # Cargar catálogo de preguntas si existe
-    if ruta_preguntas.exists():
-        df_preguntas = pd.read_parquet(ruta_preguntas)
-        log.info("Cargadas %d preguntas del catálogo", len(df_preguntas))
-    else:
-        log.warning("Catálogo de preguntas no encontrado, continuando sin metadata")
-        df_preguntas = pd.DataFrame()
-    
-    # --- Calcular frecuencias
-    df_freq = calcular_frecuencias_todas(
-        df_respuestas,
-        df_preguntas,
-        grupo_cols=["empresa", "factor"]
+    freq = (
+        fact.groupby(group_cols, dropna=False)["cedula"]
+        .nunique()
+        .reset_index(name="n_personas")
     )
-    
-    if len(df_freq) == 0:
-        log.error("No se generaron frecuencias")
-        sys.exit(1)
-    
-    # --- Identificar críticas
-    df_criticas = identificar_preguntas_criticas(df_freq)
-    
-    # --- Resumen por dimensión
-    df_dim = generar_resumen_por_dimension(df_freq)
-    
-    # --- Validación
-    ok, _ = validar_frecuencias(df_freq)
-    if not ok:
-        log.warning("Pipeline 07 con advertencias")
-    
-    # --- Agregar flag de crítica al dataset principal
-    if len(df_criticas) > 0:
-        criticas_set = set(df_criticas["id_pregunta"].unique())
-        df_freq["es_critica"] = df_freq["id_pregunta"].isin(criticas_set)
+
+    # Total por empresa × id_pregunta × forma
+    total = (
+        fact.groupby(["empresa", "forma_intra", "id_pregunta"], dropna=False)["cedula"]
+        .nunique()
+        .reset_index(name="n_total")
+    )
+    freq = freq.merge(total, on=["empresa", "forma_intra", "id_pregunta"], how="left")
+    freq["pct_empresa"] = (freq["n_personas"] / freq["n_total"] * 100).round(2)
+
+    # R8 confidencialidad
+    freq.loc[freq["n_total"] < n_min, "pct_empresa"] = None
+
+    freq = freq.rename(columns={"id_respuesta": "opcion_respuesta"})
+    log.info("Frecuencias generales: %d filas", len(freq))
+    return freq
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Parte B — Comparables Colombia (39 preguntas, discriminadas por forma)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def calcular_alta_presencia(
+    fact: pd.DataFrame,
+    id_pregunta: str,
+    forma_intra: str,
+    formula: str,
+) -> pd.Series:
+    """
+    Para una pregunta y forma dadas, identifica las filas con respuesta de alta presencia.
+    Retorna una Serie booleana indexada igual que fact.
+    """
+    mask_preg = (fact["id_pregunta"] == id_pregunta) & (fact["forma_intra"] == forma_intra)
+    resp_lower = fact["id_respuesta"].str.lower().str.strip()
+    if formula == "afrontamiento":
+        mask_resp = resp_lower.isin(ALTA_PRESENCIA_AFRONTAMIENTO)
     else:
-        df_freq["es_critica"] = False
-    
-    # --- Guardar
-    df_freq.to_parquet(proc_path / "fact_frecuencias.parquet", index=False)
-    log.info("Guardado: %s (%d filas)", proc_path / "fact_frecuencias.parquet", len(df_freq))
-    
-    if len(df_criticas) > 0:
-        df_criticas.to_parquet(proc_path / "fact_preguntas_criticas.parquet", index=False)
-        log.info("Guardado: fact_preguntas_criticas.parquet (%d filas)", len(df_criticas))
-    
-    if len(df_dim) > 0:
-        df_dim.to_parquet(proc_path / "fact_frecuencias_dimension.parquet", index=False)
-    
-    # --- Resumen
-    log.info("-" * 40)
-    log.info("RESUMEN:")
-    log.info("  Preguntas analizadas: %d", df_freq["id_pregunta"].nunique())
-    log.info("  Empresas: %d", df_freq["empresa"].nunique())
-    log.info("  Preguntas críticas: %d", len(df_criticas))
-    
-    if len(df_criticas) > 0:
-        log.info("  Top 5 preguntas más críticas:")
-        top5 = df_criticas.nlargest(5, "pct_negativo")
-        for _, row in top5.iterrows():
-            log.info("    %s: %.1f%% negativo", row["id_pregunta"], row["pct_negativo"])
-    
-    log.info("-" * 40)
-    log.info("07 completado exitosamente.")
+        mask_resp = resp_lower.isin(ALTA_PRESENCIA_LIKERT)
+    return mask_preg & mask_resp
+
+
+def calcular_comparables_colombia(
+    fact: pd.DataFrame,
+    n_min: int,
+) -> pd.DataFrame:
+    """
+    Calcula % alta presencia empresa vs % ENCST para cada una de las 39 preguntas,
+    discriminado por forma (A o B).
+    El ítem 13 duplicado genera 2 filas independientes.
+    """
+    resultados = []
+    empresas = fact["empresa"].unique()
+
+    for ref_idx, ref in enumerate(PREGUNTAS_COMPARABLES):
+        pct_pais = ref["pct"]
+        formula = ref["formula"]
+        dim = ref["dim"]
+
+        for forma, id_preg_key in [("A", "A"), ("B", "B")]:
+            id_preg = ref.get(id_preg_key)
+            if not id_preg:
+                continue  # n/a — esta forma no aplica para esta pregunta
+
+            fact_forma = fact[fact["forma_intra"] == forma]
+            if fact_forma.empty:
+                continue
+
+            for empresa in empresas:
+                fact_emp = fact_forma[fact_forma["empresa"] == empresa]
+                if fact_emp.empty:
+                    continue
+
+                # Total trabajadores con esa pregunta en esa empresa/forma
+                total_mask = fact_emp["id_pregunta"] == id_preg
+                n_total = fact_emp.loc[total_mask, "cedula"].nunique()
+                if n_total == 0:
+                    continue
+
+                # Alta presencia
+                alta_mask = calcular_alta_presencia(fact_emp, id_preg, forma, formula)
+                n_alta = fact_emp.loc[alta_mask, "cedula"].nunique()
+
+                pct_empresa = round(n_alta / n_total * 100, 2) if n_total >= n_min else None
+                diferencia_pp = round(pct_empresa - pct_pais, 2) if pct_empresa is not None else None
+
+                resultados.append({
+                    "empresa":        empresa,
+                    "forma_intra":    forma,
+                    "id_pregunta":    id_preg,
+                    "ref_idx":        ref_idx,          # índice para identificar filas duplicadas (13_intra)
+                    "dimension":      dim,
+                    "n_total":        n_total,
+                    "n_alta_presencia": n_alta,
+                    "pct_empresa":    pct_empresa,
+                    "pct_pais_encst": pct_pais,
+                    "diferencia_pp":  diferencia_pp,
+                    "formula":        formula,
+                })
+
+    df = pd.DataFrame(resultados)
+    log.info("Comparables Colombia — %d filas calculadas", len(df))
+    return df
+
+
+def calcular_top20(df_comparables: pd.DataFrame) -> pd.DataFrame:
+    """
+    Top 20 preguntas con mayor diferencia_pp positiva (empresa > Colombia) por empresa y forma.
+    """
+    top = (
+        df_comparables[
+            df_comparables["diferencia_pp"].notna() &
+            (df_comparables["diferencia_pp"] > 0)
+        ]
+        .sort_values(["empresa", "forma_intra", "diferencia_pp"], ascending=[True, True, False])
+        .groupby(["empresa", "forma_intra"], group_keys=False)
+        .head(20)
+        .copy()
+    )
+    top["top20_flag"] = True
+    log.info("Top 20 — %d filas", len(top))
+    return top
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Main
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    log.info("=" * 60)
+    log.info("SCRIPT 07 — Frecuencias + Comparables Colombia (Paso 20)")
+    log.info("=" * 60)
+
+    cfg = cargar_config()
+    proc = ROOT / cfg["paths"]["processed"]
+    n_min = cfg.get("confidencialidad_n_min", 5)
+
+    fact = pd.read_parquet(proc / "fact_respuestas_clean.parquet")
+    log.info("fact_respuestas_clean: %d filas", len(fact))
+
+    # ── Parte A: frecuencias generales ──────────────────────────────────────
+    log.info("Parte A — Frecuencias generales...")
+    freq_general = calcular_frecuencias_generales(fact, n_min)
+    out_freq = proc / "fact_frecuencias.parquet"
+    freq_general.to_parquet(out_freq, index=False)
+    log.info("Guardado: %s (%d filas)", out_freq, len(freq_general))
+
+    # ── Parte B: comparables Colombia ────────────────────────────────────────
+    log.info("Parte B — Comparables Colombia (39 preguntas)...")
+    comparables = calcular_comparables_colombia(fact, n_min)
+
+    top20 = calcular_top20(comparables)
+    comparables["top20_flag"] = comparables.index.isin(top20.index)
+
+    out_comp = proc / "fact_top20_comparables.parquet"
+    comparables.to_parquet(out_comp, index=False)
+    log.info("Guardado: %s (%d filas × %d columnas)", out_comp, *comparables.shape)
+
+    # Resumen
+    resumen = (
+        top20.groupby(["empresa", "forma_intra"])["id_pregunta"]
+        .count()
+        .reset_index(name="n_top20")
+    )
+    log.info("Preguntas en Top 20 por empresa:\n%s", resumen.to_string(index=False))
+
+    log.info("=" * 60)
+    log.info("Paso 20 completado → fact_frecuencias + fact_top20_comparables")
+    log.info("=" * 60)
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="07_frecuencias_preguntas.py — V1-Paso 20")
-    parser.add_argument("--config", default="config/config.yaml")
-    args = parser.parse_args()
-    main(config_path=args.config)
+    main()

@@ -1,5 +1,5 @@
 # AGENT.md — MentalPRO · Pipeline de Análisis de Riesgo Psicosocial
-> **Instrucciones de agente para IDE** | Versión 1.5 | Res. 2764/2022 MinTrabajo Colombia
+> **Instrucciones de agente para IDE** | Versión 2.0 | Res. 2764/2022 MinTrabajo Colombia
 
 ---
 
@@ -16,8 +16,8 @@ CAPA 1: EVALUACIÓN
   2 formas del instrumento: A (jefes, 125 preguntas) y B (operativos, 97 preguntas)
 
 CAPA 2: ANÁLISIS Y VISUALIZACIÓN  ← ESTE REPOSITORIO
-  ETL → Scoring → Baremos → Gestión → Benchmarking → 4 Dashboards
-  Stack: Python 3.11+ / pandas / plotly / Dash / scikit-learn / XGBoost
+  ETL → Scoring → Baremos → Gestión → Benchmarking → 4 Dashboards HTML estáticos
+  Stack: Python 3.11+ / pandas / plotly (standalone HTML) / scikit-learn
 
 CAPA 3: MOTOR RAG (sistema externo)
   Corpus v5: 4,178 chunks / 20 protocolos PROT-01…PROT-20
@@ -30,20 +30,20 @@ CAPA 3: MOTOR RAG (sistema externo)
 ## 2. SCRIPTS PYTHON (orden de ejecución)
 
 ```
-01_etl_star_schema.py          → ETL, validación, homologación sector
-02a_scoring_bateria.py         → Codificación + inversión + agrupación ítems
-02b_baremos.py                 → Puntaje transformado + clasificación 5 niveles
-03_scoring_gestion.py          → Media ponderada indicadores/líneas/ejes
-04_categorias_gestion.py       → Clasificación categórica gestión (5 niveles)
-05_prioridades_protocolos.py   → Ranking lesividad + KPIs + protocolos por sector
-06_benchmarking.py             → Comparativos vs Colombia + sector (ENCST)
-07_frecuencias_preguntas.py    → Distribución frecuencias + top 20 preguntas críticas
-08_consolidado_demografico.py  → Base consolidada 1 fila/trabajador + 19 KPIs
-09_costo_ausentismo.py         → Costo económico ausentismo (6 pasos)
-dashboard_v1_riesgo.py         → Visualizador 1: Resultados Riesgo Psicosocial
-dashboard_v2_gestion.py        → Visualizador 2: Gestión Salud Mental y Bienestar
-dashboard_v3_gerencial.py      → Visualizador 3: Dashboard Gerencial / Ejecutivo
-dashboard_v4_asis.py           → Visualizador 4: Perfil Demográfico y Salud (ASIS)
+scripts/01_etl_star_schema.py          → ETL, validación, homologación sector (30+ aliases)
+scripts/02a_scoring_bateria.py         → Codificación + inversión + agrupación ítems
+scripts/02b_baremos.py                 → Puntaje transformado + clasificación 5 niveles
+scripts/03_scoring_gestion.py          → Media ponderada indicadores/líneas/ejes
+scripts/04_categorias_gestion.py       → Clasificación categórica gestión (5 niveles)
+scripts/05_prioridades_protocolos.py   → Ranking lesividad + KPIs + protocolos por sector
+scripts/06_benchmarking.py             → Comparativos vs Colombia + sector (ENCST) + alerta reevaluación
+scripts/07_frecuencias_preguntas.py    → Distribución frecuencias + top 20 preguntas críticas
+scripts/08_consolidacion.py            → Base consolidada long format + joins demográficos
+scripts/09_asis_costos.py              → ASIS demográfico + costo económico ausentismo (6 pasos)
+Dashboards/dashboard_v1_riesgo.py      → Visualizador 1 → output/dashboard_v1_riesgo.html
+Dashboards/dashboard_v2_gestion.py     → Visualizador 2 → output/dashboard_v2_gestion.html
+Dashboards/dashboard_v3_gerencial.py   → Visualizador 3 → output/dashboard_v3_gerencial.html
+Dashboards/dashboard_v4_asis.py        → Visualizador 4 → output/dashboard_v4_asis.html
 ```
 
 ---
@@ -60,8 +60,10 @@ dashboard_v4_asis.py           → Visualizador 4: Perfil Demográfico y Salud (
 | R6 | LEFT JOIN en ausentismo: dim_ausentismo ~17 registros. Preservar todos los trabajadores. |
 | R7 | Colores AVANTUM inamovibles: risk_1=#10B981, risk_2=#6EE7B7, risk_3=#F59E0B, risk_4=#F97316, risk_5=#EF4444. |
 | R8 | ASIGNAR = empresa real. No filtrar ni excluir. |
-| R9 | Sector map: Comercio → Comercio/financiero (único que cambia). |
+| R9 | Sector map: 30+ aliases normalizados en 01_etl_star_schema.py → SECTOR_MAP. Desconocido → 'No clasificado'. |
 | R10 | Media ponderada en gestión: NUNCA promedio simple en fact_gestion_scores. |
+| R11 | Dashboards = HTML estático local. Export: `plotly.io.write_html(full_html=True, include_plotlyjs='cdn')`. NO usar Dash server. |
+| R12 | Canvas dashboards: 3000×2000 px, orientación vertical, una sola página HTML. |
 
 ---
 
@@ -73,19 +75,12 @@ mentalPRO/
 │   ├── raw/                    # Excel originales (no en git)
 │   │   ├── Resultado_mentalPRO.xlsx
 │   │   └── datasets.xlsx
-│   ├── processed/              # Parquets generados
-│   └── reference/              # Benchmarks Colombia/sector
-├── scripts/                    # 01_etl → 09_costo
-├── dashboards/
-│   ├── app.py
-│   ├── pages/                  # riesgo, gestion, gerencial, asis
-│   ├── components/             # sidebar, topbar, kpi_card, table_styles
-│   ├── data/loader.py
-│   └── assets/theme.py + styles.css
-├── models/                     # .pkl serializados
-├── reports/                    # PDF e informes
+│   └── processed/              # Parquets generados por los scripts
+├── scripts/                    # 01_etl_star_schema.py → 09_asis_costos.py
+├── Dashboards/                 # dashboard_v1_riesgo.py … dashboard_v4_asis.py
+├── output/                     # HTMLs generados (dashboard_v1_riesgo.html, etc.)
 ├── config/config.yaml
-└── docs/                       # Estos archivos .md
+└── docs/                       # Documentación del proyecto
 ```
 
 ---
@@ -93,29 +88,19 @@ mentalPRO/
 ## 5. REQUIREMENTS.TXT
 
 ```
+# Pipeline ETL + Scoring (obligatorio)
 pandas>=2.1.0
 numpy>=1.26.0
 openpyxl>=3.1.0
-plotly>=5.18.0
-dash>=2.16.0
-dash-bootstrap-components>=1.5.0
-dash-iconify>=0.1.6
-scikit-learn>=1.4.0
-xgboost>=2.0.0
-lightgbm>=4.2.0
-shap>=0.44.0
-scipy>=1.12.0
-statsmodels>=0.14.0
-imbalanced-learn>=0.12.0
-prince>=0.13.0
-optuna>=3.5.0
-fastapi>=0.108.0
-uvicorn>=0.25.0
-sqlalchemy>=2.0.0
-jinja2>=3.1.0
-weasyprint>=61.0
 pyarrow>=14.0.0
-pydantic>=2.5.0
+pyyaml>=6.0.0
+plotly>=5.18.0
+
+# Análisis estadístico (opcional, para scripts avanzados)
+scipy>=1.12.0
+scikit-learn>=1.4.0
+
+# NO requerido: dash, fastapi, uvicorn — los dashboards son HTML estático
 ```
 
 ---
@@ -123,18 +108,26 @@ pydantic>=2.5.0
 ## 6. ORDEN DE EJECUCIÓN
 
 ```bash
-python scripts/01_etl_star_schema.py
-python scripts/02a_scoring_bateria.py
-python scripts/02b_baremos.py
-python scripts/03_scoring_gestion.py
-python scripts/04_categorias_gestion.py
-python scripts/05_prioridades_protocolos.py
-python scripts/06_benchmarking.py
-python scripts/07_frecuencias_preguntas.py
-python scripts/08_consolidado_demografico.py
-python scripts/09_costo_ausentismo.py
-python dashboards/app.py
-# Abrir: http://localhost:8050/riesgo
+# Desde la raíz del proyecto (c:\Users\Avant\Documents\GitHub\Python)
+python scripts/01_etl_star_schema.py        # → data/processed/fact_respuestas.parquet + dim_*.parquet
+python scripts/02a_scoring_bateria.py       # → data/processed/fact_scores_brutos.parquet
+python scripts/02b_baremos.py               # → data/processed/fact_scores_baremo.parquet
+python scripts/03_scoring_gestion.py        # → data/processed/fact_gestion_scores.parquet
+python scripts/04_categorias_gestion.py     # → agrega columnas a fact_gestion_scores
+python scripts/05_prioridades_protocolos.py # → data/processed/fact_prioridades.parquet
+python scripts/06_benchmarking.py           # → data/processed/fact_benchmark.parquet + fact_riesgo_empresa.parquet
+python scripts/07_frecuencias_preguntas.py  # → data/processed/fact_frecuencias.parquet + fact_top20_comparables.parquet
+python scripts/08_consolidacion.py          # → data/processed/fact_consolidado.parquet
+python scripts/09_asis_costos.py            # → data/processed/fact_asis.parquet + fact_costo_ausentismo.parquet
+
+# Dashboards → HTML estático (no requieren servidor)
+python Dashboards/dashboard_v1_riesgo.py    # → output/dashboard_v1_riesgo.html
+python Dashboards/dashboard_v2_gestion.py   # → output/dashboard_v2_gestion.html
+python Dashboards/dashboard_v3_gerencial.py # → output/dashboard_v3_gerencial.html
+python Dashboards/dashboard_v4_asis.py      # → output/dashboard_v4_asis.html
+
+# Abrir en navegador (doble clic o):
+start output\dashboard_v1_riesgo.html       # Windows
 ```
 
 ---
