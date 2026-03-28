@@ -410,9 +410,9 @@
 ## Fuente: II y III encuesta condiciones de salud y trabajo 2013 - 2021##
 
 ## paso 21##
-## 21. Revisar calculos de los 20 pasos anteriores y verificar que los resultados sean correctos
+## 21. Revisar calculos de los 20 pasos anteriores y verificar que los resultados sean correctos##
 ## paso 22##
-## 22. Segun plan de analisis del visualizador 1, estimar lo que se requiere para el visualizador 1, y ejecutarlo
+## 22. Segun plan de analisis del visualizador 1, estimar lo que se requiere para el visualizador 1, y ejecutarlo##
 
 
 

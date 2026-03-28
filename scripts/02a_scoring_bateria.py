@@ -671,6 +671,11 @@ def main():
     fact.to_parquet(out, index=False)
     log.info("Guardado: %s (%d filas × %d columnas)", out, *fact.shape)
 
+    # dim_pregunta — necesaria por los dashboards
+    out_dim = proc / "dim_pregunta.parquet"
+    dim_pregunta.to_parquet(out_dim, index=False)
+    log.info("Guardado: %s (%d filas × %d columnas)", out_dim, *dim_pregunta.shape)
+
     log.info("=" * 60)
     log.info("Pasos 1-8 completados → fact_scores_brutos.parquet")
     log.info("=" * 60)

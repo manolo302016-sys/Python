@@ -280,8 +280,11 @@ def validar_scores_baremo(df: pd.DataFrame) -> tuple[bool, pd.DataFrame]:
     """Valida integridad de fact_scores_baremo."""
     errores = []
 
-    # PK sin duplicados
-    dup = df.duplicated(subset=["cedula", "forma_intra", "nivel_analisis", "nombre_nivel"]).sum()
+    # PK sin duplicados — instrumento incluido porque misma dimensión puede
+    # aparecer en IntraA e IntraB para el mismo trabajador (duplicado válido)
+    dup = df.duplicated(
+        subset=["cedula", "instrumento", "forma_intra", "nivel_analisis", "nombre_nivel"]
+    ).sum()
     if dup > 0:
         errores.append({"check": "pk_duplicada", "n": int(dup)})
 

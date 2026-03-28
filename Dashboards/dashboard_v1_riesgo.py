@@ -449,8 +449,8 @@ def build_s6(top20: pd.DataFrame, dim_pregunta: pd.DataFrame, empresa: str, form
         ),
     ))
 
+    fig.update_layout(**base_layout(f"S6 — Top 20 Preguntas con Mayor Diferencia vs Colombia | {empresa}", height=600))
     fig.update_layout(
-        **base_layout(f"S6 — Top 20 Preguntas con Mayor Diferencia vs Colombia | {empresa}", height=600),
         xaxis_title="Diferencia en puntos porcentuales (empresa − Colombia)",
         margin=dict(l=350, r=60, t=60, b=60),
     )
