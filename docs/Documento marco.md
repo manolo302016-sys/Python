@@ -302,7 +302,7 @@
 ## n/a	|Individual	|Capital psicológico	|n/a	|(sumatoria de puntajes brutos obtenidos en todas las preguntas de capitalpsicologico/puntaje de transformacion)*100	|12	|29	|51	|69	|89	|100##  
 
 ## paso 14##
-## 14. Baremos Bateria Ministerio Colombia— Tablas de puntos de corte por factor intra, extra y estrés tanto A como B los factores intra, extra, estrés se califican segun sumatoria de respuestas y puntajes de transformación (puntaje bruto) y se categorizan en 5 niveles de riesgo (puntaje transformado). Cada persona evaluada obtiene para cada factor un puntaje bruto y un puntaje transformado en 5 niveles de riesgo##
+## 14. Baremos Bateria Ministerio Colombia— Tablas de puntos de corte por factor intra, extra tanto A como B los factores intra, extra se califican segun sumatoria de respuestas y puntajes de transformación (puntaje bruto) y se categorizan en 5 niveles de riesgo (puntaje transformado). Cada persona evaluada obtiene para cada factor un puntaje bruto y un puntaje transformado en 5 niveles de riesgo##
 ## forma_intra|	 factor |	formula_calificacion|	Puntaje_transformación|	 sin_riesgo_max |	 bajo_max 	| medio_max |	 alto_max |	 muy_alto_max##
 ## A|	intralaboral_A	|(sumatoria de puntajes brutos obtenidos en todas las preguntas A/puntaje de transformacion)|*100|	492|	19.7|	25.8|	31.5|	38.8|	100##
 ## B|	intralaboral_B	|(sumatoria de puntajes brutos obtenidos en todas las preguntas B/puntaje de transformacion)|*100|	388|	20.6|	26|	31.2|	38.7|	100##
@@ -310,8 +310,18 @@
 ## B|	intralaboral_B+extralaboral	|(sumatoria de puntajes brutos obtenidos en todas las preguntas B+extralaboral/puntaje de transformacion)|*100|	512|	19.9|	24.8|	29.5|	35.4|	100##
 ## A|	extralaboral	|(sumatoria de puntajes brutos obtenidos en todas las preguntas extralaboral A/puntaje de transformacion)|*100|	124|	11.3|	16.9|	22.6|	29|	100##
 ## B|	extralaboral	|(sumatoria de puntajes brutos obtenidos en todas las preguntas extralaboral B/puntaje de transformacion)|*100|	124|	12.9|	17.7|	24.2|	32.3|	100##
-## A|	estres	|(sumatoria de puntajes brutos obtenidos en todas las preguntas estres A/puntaje de transformacion)|*100|	61.16|	7.8|	12.6|	14.7|	25|	100##
-## B|	estres	|(sumatoria de puntajes brutos obtenidos en todas las preguntas estres B/puntaje de transformacion)|*100|	61.16|	6.5|	11.8|	17|	23.4|	100##
+
+## paso 14.1## 
+## 14.1 Baremos Bateria Ministerio Colombia— Tablas de puntos de corte estres. El total del puntaje bruto de estres es el resultado d ela sumatoria de 4 promedios ponderados/puntaje de transformación * 100 y se categorizan en 5 niveles de riesgo (puntaje transformado). Cada persona evaluada obtiene para cada factor un puntaje bruto y un puntaje transformado en 5 niveles de riesgo##
+
+## Promedio ponderado 1| Se obtiene el puntaje promedio de los ítems 1 al 8, (1_estres a 8_estres) y el resultado se multiplica por cuatro (4)##
+## Promedio ponderado 2| Se obtiene el puntaje promedio de los ítems 9 al 12 (9_estres a 12_estres), y el resultado se multiplica por tres (3).##
+## Promedio ponderado 3| Se obtiene el puntaje promedio de los ítems 13 al 22 (13_estres a 22_estres), y el resultado se multiplica por dos (2).##
+## Promedio ponderado 4| Se obtiene el puntaje promedio de los ítems 23 al 31 (23_estres a 31_estres).##
+
+## forma_intra|	 factor |	formula_calificacion|	Puntaje_transformación|	 sin_riesgo_max |	 bajo_max 	| medio_max |	 alto_max |	 muy_alto_max##
+## A|	estres	|(sumatoria de los 4 subtotales o promedios ponderados estres A/puntaje de transformacion)|*100|	61.16|	7.8|	12.6|	14.7|	25|	100##
+## B|	estres	|(sumatoria de  los 4 subtotales o promedios ponderados estres B/puntaje de transformacion)|*100|	61.16|	6.5|	11.8|	17|	23.4|	100##
 
 
 ## paso 15##

@@ -9,7 +9,7 @@
 |--------|---------------------|---------------------|
 | 01_etl_star_schema.py | V1-Paso1 (parcial) · Homologación sector · Validación PK | fact_respuestas_clean |
 | 02a_scoring_bateria.py | V1-Paso1 (completo) · V1-Paso2 · V1-Paso3 · V1-Paso4 · V1-Paso5 · V1-Paso6 · V1-Paso7 · V1-Paso8 | fact_scores_brutos |
-| 02b_baremos.py | V1-Paso9 · V1-Paso10 · V1-Paso11 · V1-Paso12 · V1-Paso13 · V1-Paso14 · V1-Paso15 | fact_scores_baremo |
+| 02b_baremos.py | V1-Paso9 · V1-Paso10 · V1-Paso11 · V1-Paso12 · V1-Paso13 · V1-Paso14 · V1-Paso14.1 · V1-Paso15 | fact_scores_baremo |
 | 03_scoring_gestion.py | V2-Paso1 · V2-Paso2 · V2-Paso3 (3 niveles + inversión) | fact_gestion_scores |
 | 04_categorias_gestion.py | V2-Paso4 · V2-Paso5 | fact_gestion_scores (+ columnas) |
 | 05_prioridades_protocolos.py | V2-Paso6 · V2-Paso7 | fact_prioridades |
@@ -101,18 +101,56 @@ Capital_psicologico: Optimismo 1-3 | Esperanza 4-6 | Resiliencia 7-9 | Autoefica
 
 #### V1-Paso9 al V1-Paso15 — Baremos Res.2764 + AVANTUM
 ```
-Proceso: Sumatoria respuestas → puntaje bruto → puntaje transformado → 5 niveles
-Niveles Res.2764: Sin riesgo | Bajo | Medio | Alto | Muy alto
-Niveles Individual: Muy bajo | Bajo | Medio | Alto | Muy alto (protección)
+Proceso: Sumatoria respuestas → puntaje bruto → puntaje transformado (1 decimal) → 5 niveles
 
-Baremos diferenciados por forma:
-  IntraA: transformación máxima 492 pts
-  IntraB: transformación máxima 388 pts
+REGLA DE REDONDEO: puntaje_transformado = round(bruto / max × 100, 1)
+  El redondeo a 1 decimal es OBLIGATORIO para evitar casos borde en las clasificaciones.
 
-Factor total IntraA: sin_riesgo≤19.7 | bajo≤25.8 | medio≤31.5 | alto≤38.8
-Factor total IntraB: sin_riesgo≤20.6 | bajo≤26.0 | medio≤31.2 | alto≤38.7
-Individual IntraA+B: muy_bajo≤29 | bajo≤51 | medio≤69 | alto≤89
-% vulnerabilidad = (nivel muy_bajo + bajo) / total evaluados
+Etiquetas por tipo_baremo (columna etiqueta_nivel):
+  tipo "riesgo"               → Sin riesgo | Riesgo bajo | Riesgo medio | Riesgo alto | Riesgo muy alto
+  tipo "afrontamiento_dim"    → Muy inadecuado | Inadecuado | Algo adecuado | Adecuado | Muy adecuado
+  tipo "capitalpsicologico_dim" → Muy bajo capital psicológico | Bajo capital psicológico |
+                                  Medio capital psicológico | Alto capital psicológico | Muy alto capital psicológico
+  tipo "individual"           → Muy bajo | Bajo | Medio | Alto | Muy alto
+  tipo "proteccion"           → Muy bajo | Bajo | Medio | Alto | Muy alto
+
+Pasos 9-10: Dimensiones IntraA / IntraB / Extralaboral
+  Forma A: 19 dimensiones (max variable por dimensión, derivado de datos)
+  Forma B: 16 dimensiones (sin Consistencia del rol, Exigencias resp., Relación colaboradores)
+  Extralaboral A/B: 7 dimensiones con puntos de corte independientes por forma
+  tipo_baremo = "riesgo"
+
+Paso 11: Dimensiones Afrontamiento y Capital Psicológico (instrumento Individual)
+  Afrontamiento: 3 subdimensiones (max=4), tipo_baremo = "afrontamiento_dim"
+  Capital Psicológico: 4 subdimensiones (max=3), tipo_baremo = "capitalpsicologico_dim"
+
+Pasos 12-13: Dominios IntraA / IntraB / Afrontamiento
+  IntraA: 4 dominios | IntraB: 4 dominios
+  Dominio Afrontamiento (Estrategias de Afrontamiento): media ponderada, max=4, tipo="proteccion"
+  Extralaboral NO tiene subdominios (el factor = el único dominio)
+
+Paso 14: Factor IntraA + IntraB + Extralaboral + Estrés
+  IntraA: max=492 | cortes: 19.7 / 25.8 / 31.5 / 38.8
+  IntraB: max=388 | cortes: 20.6 / 26.0 / 31.2 / 38.7
+  Extralaboral A: max=124 | cortes: 11.3 / 16.9 / 22.6 / 29.0
+  Extralaboral B: max=124 | cortes: 12.9 / 17.7 / 24.2 / 32.3
+  IntraA+Extralaboral: max=616 | cortes: 18.8 / 24.4 / 29.5 / 35.4
+  IntraB+Extralaboral: max=512 | cortes: 19.9 / 24.8 / 29.5 / 35.4
+
+Paso 14.1: Factor Estrés — fórmula de 4 promedios ponderados (NO suma simple)
+  PP1 = promedio(ítems 1-8)  × 4    (max PP1 = 25.50)
+  PP2 = promedio(ítems 9-12) × 3    (max PP2 = 18.00)
+  PP3 = promedio(ítems 13-22)× 2    (max PP3 = 12.00)
+  PP4 = promedio(ítems 23-31)× 1    (max PP4 = 5.667)
+  puntaje_bruto = PP1 + PP2 + PP3 + PP4   (max teórico = 61.16)
+  Estrés A: cortes 7.8 / 12.6 / 14.7 / 25.0
+  Estrés B: cortes 6.5 / 11.8 / 17.0 / 23.4
+
+Paso 15: Factor Individual — Afrontamiento + Capital Psicológico combinados
+  Suma de todos los ítems de afrontamiento (12) + capitalpsicologico (12) por trabajador
+  max = 24.0 | cortes A y B: 29.0 / 51.0 / 69.0 / 89.0 | tipo_baremo = "individual"
+
+% vulnerabilidad psicológica = (nivel muy_bajo + bajo) / total evaluados × 100
 ```
 
 ---
@@ -121,37 +159,84 @@ Individual IntraA+B: muy_bajo≤29 | bajo≤51 | medio≤69 | alto≤89
 
 #### V1-Paso16 — Riesgo total empresa
 ```
-Si forma A o B obtiene nivel Alto o Muy alto → re-evaluación obligatoria en 1 año
+Proceso:
+  1. fact_scores_baremo[nivel_analisis='factor', instrumento in (IntraA, IntraB)]
+  2. Promedio puntaje_bruto por empresa × instrumento
+  3. puntaje_transformado = round(promedio / max × 100, 1)   ← 1 decimal obligatorio
+  4. Clasificar con baremos del Paso 14:
+     IntraA: max=492 | cortes 19.7 / 25.8 / 31.5 / 38.8
+     IntraB: max=388 | cortes 20.6 / 26.0 / 31.2 / 38.7
+  5. nivel_riesgo_empresa >= 4 → debe_reevaluar = True
+
+Output: fact_riesgo_empresa.parquet (1 fila por empresa × instrumento)
 ```
 
-#### V1-Paso17 — %Alto+MuyAlto IntraA+B vs sector (III ENCST 2021)
+#### V1-Paso17 — %Alto+MuyAlto IntraA/B vs sector (III ENCST 2021)
 ```
-Referencia por sector económico:
-  Agricultura: 31.0% | Minas: 42.9% | Manufactura: 44.8%
-  Servicios: 37.2% | Construcción: 42.2% | Comercio: 36.4%
-  Promedio general: 39.7%
+Proceso:
+  % trabajadores con nivel_riesgo >= 4 en factor IntraA (forma A) y IntraB (forma B)
+  Comparar empresa_pct vs pct_sector (config.yaml → benchmark_sector)
+  diferencia_pp = empresa_pct - pct_sector
+  Semáforo: rojo si diferencia_pp > 0 (empresa peor que sector) | verde si <= 0
+  Grupos < 5 → semaforo = 'insuficiente' (R8)
 
-Calcular: empresa_pct - sector_pct = diferencia_pp
-Semáforo: rojo si empresa > sector, verde si empresa <= sector
+Referencias sectoriales (III ENCST 2021):
+  Agricultura: 31.0% | Manufactura: 44.8% | Servicios: 37.2%
+  Construcción: 42.2% | Comercio/financiero: 36.4% | Minas y canteras: 42.9%
+  Adm. pública: 36.0% | Educación: 40.4% | Salud: 40.3%
+  Transporte: 37.2% (usa Servicios — sin dato ENCST)
+  No clasificado: 39.7% (promedio general)
+
 NOTA: Benchmarking sectorial SOLO para total intralaboral — NO para dominios/dimensiones
 ```
 
 #### V1-Paso18 — %Alto+MuyAlto dominios vs Colombia (II+III ENCST 2013-2021)
 ```
-Referencias nacionales:
-  Demandas: 43.9% | Estrés: 32.9% | Extralaboral: 26.3%
-  Control: 16.9% | Liderazgo y relaciones: 13.3%
-  Vulnerabilidad (individual): 4.2% | Recompensas: 3.3%
+Proceso:
+  Dominios IntraA/B: filter nivel_analisis='dominio', instrumento=IntraA/IntraB
+    → % nivel_riesgo >= 4 por empresa × forma
+  Extralaboral: filter nivel_analisis='factor', instrumento='Extralaboral'
+    → % nivel_riesgo >= 4 (aplica A y B combinados)
+  Estrés: filter nivel_analisis='factor', instrumento='Estres'
+    → % nivel_riesgo >= 4 (aplica A y B combinados)
+  Vulnerabilidad: filter nivel_analisis='factor', instrumento='Individual'
+    → % nivel_riesgo <= 2 (muy_bajo + bajo = vulnerabilidad psicológica)
+
+Referencias Colombia (II+III ENCST 2013-2021):
+  Nombre en datos (nombre_nivel)        Referencia
+  "Demandas del trabajo"                43.9%
+  "Control sobre el trabajo"            16.9%
+  "Liderazgo y relaciones sociales"     13.3%
+  "Recompensas"                          3.3%
+  "Extralaboral" (factor)               26.3%
+  "Estres" (factor)                     32.9%
+  "Vulnerabilidad" (Individual nivel<=2) 4.2%
 ```
 
-#### V1-Paso19 — %Alto+MuyAlto dimensiones vs Colombia
+#### V1-Paso19 — %Alto+MuyAlto dimensiones vs Colombia (II+III ENCST 2013-2021)
 ```
-12 dimensiones comparables:
-  Carga mental: 58.2% | Demandas emocionales: 49.4% | Demandas cuantitativas: 39.2%
-  Características liderazgo: 25.9% | Control autonomía: 22.1%
-  Influencia extralaboral: 21.5% | Claridad del rol: 20.5%
-  Oportunidades desarrollo: 18.4% | Capacitación: 11.0%
-  Relaciones sociales: 10.1% | Supuesto acoso: 8.2% | Claridad rol B: 5.8%
+Proceso:
+  filter nivel_analisis='dimension', calcular por empresa × forma_intra
+  → % nivel_riesgo >= 4 vs referencia Colombia
+  Semáforo: rojo si diferencia_pp > 0 | verde si <= 0 | insuficiente si n < 5 (R8)
+
+  EXCEPCIÓN: "Claridad de rol" usa referencia diferenciada por forma:
+    Forma A: 20.5% | Forma B: 5.8%
+
+11 dimensiones comparables (nombre_nivel exacto en fact_scores_baremo):
+  "Demandas de carga mental"                                   58.2%
+  "Demandas emocionales"                                       49.4%
+  "Demandas cuantitativas"                                     39.2%
+  "Características del liderazgo"                              25.9%
+  "Control y autonomía sobre el trabajo"                       22.1%
+  "Influencia del trabajo sobre el entorno extra"              21.5%  (IntraA/B)
+  "Influencia del entorno extralaboral sobre el trabajo"       21.5%  (Extralaboral)
+  "Claridad de rol"                                            20.5% A / 5.8% B
+  "Oportunidades de desarrollo y uso de habilidad"             18.4%
+  "Capacitación"                                               11.0%
+  "Relaciones sociales en el trabajo"                          10.1%
+
+Nota: "Supuesto acoso laboral" no presente en este dataset → no incluido
 ```
 
 ---
@@ -160,11 +245,23 @@ Referencias nacionales:
 
 #### V1-Paso20 — Distribución frecuencias + Top 20 preguntas críticas
 ```
-Para todos los ítems: tabla freq(opcion_respuesta) / n_total por pregunta
-Top 20 preguntas críticas (39 preguntas clave con referencia ENCST II-III):
-  Calcular: empresa_pct(Siempre+Casi siempre) vs pais_pct(ENCST)
-  Ordenar por diferencia_pp DESC → Top 20 con empresa > país
-  Output: id_pregunta | pregunta | dimension | empresa_pct | pais_pct | diferencia_pp
+Parte A — Frecuencias generales:
+  Por empresa × forma_intra × id_pregunta × opcion_respuesta:
+    n_personas = trabajadores únicos que eligieron esa opción
+    pct_empresa = n_personas / n_total × 100
+    R8: pct=None si n_total < 5
+
+Parte B — Comparables Colombia (39 preguntas clave):
+  Discriminado por forma A y B (id_pregunta diferente por forma para ítems intra)
+  Fórmula "alta presencia":
+    likert        → "siempre" + "casi siempre"
+    afrontamiento → "frecuentemente hago eso" + "siempre hago eso"
+  diferencia_pp = pct_empresa - pct_pais_encst
+  Top 20: top 20 con diferencia_pp > 0 (empresa peor que Colombia), por empresa × forma
+
+Outputs:
+  fact_frecuencias.parquet        — frecuencias generales todos los ítems
+  fact_top20_comparables.parquet  — 39 preguntas + top20_flag por empresa × forma
 ```
 
 ---
@@ -346,11 +443,13 @@ NOTA: Si salario promedio > SMLV, ajustar en Paso 1.
 |-------|----|-------------|
 | fact_respuestas_clean | cedula + forma_intra + id_pregunta | FactRespuestas validada |
 | fact_scores_brutos | cedula + forma_intra + id_pregunta | Score numérico + tipo_escala |
-| fact_scores_baremo | cedula + forma_intra + nivel_analisis | Score transformado + nivel_riesgo |
+| fact_scores_baremo | cedula + forma_intra + nivel_analisis + nombre_nivel | Score transformado (1 decimal) + nivel_riesgo + etiqueta_nivel |
+| fact_riesgo_empresa | empresa + instrumento | Nivel riesgo empresa + debe_reevaluar |
+| fact_benchmark | empresa + nivel_analisis + nombre_nivel + forma_intra | empresa_pct + pct_referencia + diferencia_pp + semaforo |
+| fact_frecuencias | empresa + forma_intra + id_pregunta + opcion_respuesta | n_personas + pct_empresa |
+| fact_top20_comparables | empresa + forma_intra + id_pregunta + ref_idx | pct_empresa + pct_pais_encst + diferencia_pp + top20_flag |
+| fact_consolidado | cedula + nivel_analisis + nombre_nivel | fact_scores_baremo enriquecida con dim_trabajador + dim_demografia + dim_ausentismo |
 | fact_gestion_scores | cedula + forma_intra + eje + linea | Score 0-1 + nivel_gestion |
 | fact_prioridades | empresa + prot_id | Prioridad protocolo |
-| fact_benchmark | nivel_analisis + forma | empresa_pct + pais_pct + diferencia_pp |
-| fact_frecuencias | id_pregunta + opcion_respuesta | n_personas + pct_empresa + top20_flag |
-| fact_consolidado | cedula | 1 fila/trabajador × todos scores + demo |
 | fact_kpis_gerenciales | empresa | 19 KPIs calculados |
 | fact_costo_ausentismo | empresa | 6 pasos costo económico |

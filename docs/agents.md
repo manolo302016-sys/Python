@@ -56,7 +56,7 @@ Dashboards/dashboard_v4_asis.py        → Visualizador 4 → output/dashboard_v
 | R2 | Baremos diferenciados A/B: IntraA (transf. 492) ≠ IntraB (transf. 388). |
 | R3 | No hardcodear rutas: usar rutas relativas o config.yaml. |
 | R4 | fact_respuestas es inmutable. Scores en fact_scores_baremo y fact_gestion_scores. |
-| R5 | 5 niveles de riesgo normativos: Sin riesgo/Bajo/Medio/Alto/Muy alto. No reducir. |
+| R5 | 5 niveles normativos. Etiqueta depende de tipo_baremo: riesgo→"Sin riesgo/Riesgo bajo/…/Riesgo muy alto"; afrontamiento_dim→"Muy inadecuado…Muy adecuado"; capitalpsicologico_dim→"Muy bajo capital psicológico…Muy alto"; individual/proteccion→"Muy bajo…Muy alto". |
 | R6 | LEFT JOIN en ausentismo: dim_ausentismo ~17 registros. Preservar todos los trabajadores. |
 | R7 | Colores AVANTUM inamovibles: risk_1=#10B981, risk_2=#6EE7B7, risk_3=#F59E0B, risk_4=#F97316, risk_5=#EF4444. |
 | R8 | ASIGNAR = empresa real. No filtrar ni excluir. |
@@ -150,7 +150,12 @@ empresa:
 
 scoring:
   formas_validas: ["A", "B"]
-  niveles_riesgo: ["Sin riesgo", "Bajo", "Medio", "Alto", "Muy alto"]
+  niveles_riesgo: [1, 2, 3, 4, 5]   # int; etiqueta depende de tipo_baremo (ver R4)
+  etiquetas_riesgo:          ["Sin riesgo", "Riesgo bajo", "Riesgo medio", "Riesgo alto", "Riesgo muy alto"]
+  etiquetas_afrontamiento:   ["Muy inadecuado", "Inadecuado", "Algo adecuado", "Adecuado", "Muy adecuado"]
+  etiquetas_capitalpsic:     ["Muy bajo capital psicológico", "Bajo capital psicológico", "Medio capital psicológico", "Alto capital psicológico", "Muy alto capital psicológico"]
+  etiquetas_individual:      ["Muy bajo", "Bajo", "Medio", "Alto", "Muy alto"]
+  redondeo_puntaje: 1        # puntaje_transformado = round(bruto/max*100, 1) SIEMPRE
 
 rag:
   corpus_version: "v5.0"

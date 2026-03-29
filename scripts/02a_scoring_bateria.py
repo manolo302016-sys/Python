@@ -579,12 +579,23 @@ def _construir_dim_pregunta(fact: pd.DataFrame, cat: pd.DataFrame) -> pd.DataFra
         elif s == "estres":
             return "Estr\u00e9s"
         elif s == "afrontamiento":
-            return "Afrontamiento"
+            return "Estrategias de Afrontamiento"
         elif s == "capitalpsicologico":
-            return "Vulnerabilidad"
+            return "Capital psicológico"
         return None
 
     result["dominio"] = result.apply(_dominio, axis=1)
+
+    # ── V1: overrides post-join (Marco paso 7-8) ─────────────────────────────
+    # Instrumentos individuales: factor siempre "Individual"
+    mask_ind = result["sufijo"].isin(["afrontamiento", "capitalpsicologico"])
+    result.loc[mask_ind, "factor"] = "Individual"
+
+    # Estrés: dimensión y factor únicos para V1 (categorias_analisis tiene
+    # 9_estres y 11_estres con factor="Extralaboral" → solo válido para V2)
+    mask_est = result["sufijo"] == "estres"
+    result.loc[mask_est, "dimension"] = "Estrés"
+    result.loc[mask_est, "factor"] = "Estrés"
 
     dim_pq = result[
         ["id_pregunta", "forma_intra", "instrumento", "dimension", "dominio", "factor"]

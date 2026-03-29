@@ -169,17 +169,29 @@ Guardado: data/processed/fact_scores_brutos.parquet
 
 ### fact_scores_baremo
 ```
-PK: cedula + forma_intra + nivel_analisis
+PK: cedula + forma_intra + nivel_analisis + nombre_nivel
 Generado por: 02b_baremos.py
 Columnas:
   cedula | empresa | forma_intra | sector_rag
+  instrumento       — IntraA | IntraB | Extralaboral | Estres | Afrontamiento |
+                      CapPsico | Individual | IntraA+Extralaboral | IntraB+Extralaboral
   nivel_analisis    — 'dimension' | 'dominio' | 'factor'
   nombre_nivel      — nombre de la dimensión/dominio/factor
   puntaje_bruto     — suma de ítems del nivel
-  puntaje_transformado — después de aplicar baremo
-  nivel_riesgo      — 1-5 (Res.2764) | nivel_proteccion (1-5 AVANTUM)
-  tipo_baremo       — 'riesgo' | 'proteccion'
+  transformacion_max — máximo posible para el nivel (derivado de datos en dim/dom; fijo en factor)
+  puntaje_transformado — round(bruto / max × 100, 1)  ← SIEMPRE 1 decimal
+  nivel_riesgo      — int 1-5
+  tipo_baremo       — 'riesgo' | 'afrontamiento_dim' | 'capitalpsicologico_dim' |
+                      'individual' | 'proteccion'
+  etiqueta_nivel    — texto categorico según tipo_baremo (ver R4 en reglas_negocio.md)
 Guardado: data/processed/fact_scores_baremo.parquet
+
+Factores disponibles (nivel_analisis='factor'):
+  IntraA (max=492, forma A) | IntraB (max=388, forma B)
+  Extralaboral A (max=124) | Extralaboral B (max=124)
+  IntraA+Extralaboral (max=616, forma A) | IntraB+Extralaboral (max=512, forma B)
+  Estres A/B (max teórico=61.16, fórmula 4 promedios ponderados)
+  Individual A/B (max=24, Afrontamiento+CapPsico combinados)
 ```
 
 ### fact_gestion_scores

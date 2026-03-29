@@ -123,7 +123,7 @@ def calcular_riesgo_empresa(fact_baremo: pd.DataFrame) -> pd.DataFrame:
         bremo = BAREMO_FACTOR_EMPRESA.get(instr, {})
         if not bremo:
             continue
-        pt = round(row["puntaje_bruto_promedio"] / bremo["max"] * 100, 2)
+        pt = round(row["puntaje_bruto_promedio"] / bremo["max"] * 100, 1)
         nivel = clasificar_nivel_baremo(pt, bremo["c_sr"], bremo["c_b"], bremo["c_m"], bremo["c_a"])
         resultados.append({
             "empresa":               row["empresa"],
@@ -152,7 +152,6 @@ def calcular_pct_alto_muy_alto(
     nombre_nivel: str,
     forma: str | None,
     grupo_by_cols: list[str],
-    n_min: int,
 ) -> pd.DataFrame:
     """
     Calcula % personas con nivel_riesgo 4 o 5 para un nivel/nombre/forma dados.
@@ -203,7 +202,7 @@ def construir_benchmark(cfg: dict, fact_baremo: pd.DataFrame, n_min: int) -> pd.
     # ── Paso 17: factor intralaboral A y B vs sector ──────────────────────────
     for forma, instr in [("A", "IntraA"), ("B", "IntraB")]:
         sub = calcular_pct_alto_muy_alto(
-            fact_baremo, "factor", instr, forma, grupo_cols, n_min
+            fact_baremo, "factor", instr, forma, grupo_cols
         )
         if sub.empty:
             continue
@@ -225,66 +224,113 @@ def construir_benchmark(cfg: dict, fact_baremo: pd.DataFrame, n_min: int) -> pd.
                 "semaforo":          semaforo_diff(diff, row["n_total"], n_min),
             })
 
-    # ── Paso 18: dominios intra A/B + extralaboral + estrés vs Colombia ───────
-    dominios_paso18 = [
-        ("demandas_del_trabajo",          "IntraA", "A"),
-        ("demandas_del_trabajo",          "IntraB", "B"),
-        ("control_sobre_el_trabajo",      "IntraA", "A"),
-        ("control_sobre_el_trabajo",      "IntraB", "B"),
-        ("liderazgo_relaciones_sociales",  "IntraA", "A"),
-        ("liderazgo_relaciones_sociales",  "IntraB", "B"),
-        ("recompensas",                    "IntraA", "A"),
-        ("recompensas",                    "IntraB", "B"),
-        ("Extralaboral",                   "Extralaboral", None),
-        ("Estrés",                         "Estres",        None),
-        ("Vulnerabilidad",                 "Individual",    None),
+    # ── Paso 18: dominios intra A/B vs Colombia ──────────────────────────────
+    # Nombres exactos según nombre_nivel en fact_scores_baremo (nivel_analisis='dominio')
+    dominios_intra = [
+        ("Demandas del trabajo",            "IntraA", "A"),
+        ("Demandas del trabajo",            "IntraB", "B"),
+        ("Control sobre el trabajo",        "IntraA", "A"),
+        ("Control sobre el trabajo",        "IntraB", "B"),
+        ("Liderazgo y relaciones sociales", "IntraA", "A"),
+        ("Liderazgo y relaciones sociales", "IntraB", "B"),
+        ("Recompensas",                     "IntraA", "A"),
+        ("Recompensas",                     "IntraB", "B"),
     ]
 
-    for nombre_dom, instr_filter, forma in dominios_paso18:
-        mask_instr = fact_baremo["instrumento"] == instr_filter if instr_filter else pd.Series(True, index=fact_baremo.index)
+    for nombre_dom, instr_filter, forma in dominios_intra:
         sub_all = fact_baremo[
             (fact_baremo["nivel_analisis"] == "dominio") &
             (fact_baremo["nombre_nivel"] == nombre_dom) &
-            mask_instr
+            (fact_baremo["instrumento"] == instr_filter)
         ].copy()
-
-        # Vulnerabilidad (individual) = % nivel 1 o 2 en factor individual
-        if nombre_dom == "Vulnerabilidad":
-            sub_all = fact_baremo[
-                (fact_baremo["nivel_analisis"] == "factor") &
-                (fact_baremo["instrumento"] == "Individual")
-            ].copy()
-            total = sub_all.groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_total")
-            vuln = sub_all[sub_all["nivel_riesgo"] <= 2].groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_alto")
-            sub_calc = total.merge(vuln, on=grupo_cols, how="left")
-            sub_calc["n_alto"] = sub_calc["n_alto"].fillna(0).astype(int)
-            sub_calc["pct_empresa"] = (sub_calc["n_alto"] / sub_calc["n_total"] * 100).round(2)
-        else:
-            total = sub_all.groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_total")
-            alto = sub_all[sub_all["nivel_riesgo"] >= 4].groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_alto")
-            sub_calc = total.merge(alto, on=grupo_cols, how="left")
-            sub_calc["n_alto"] = sub_calc["n_alto"].fillna(0).astype(int)
-            sub_calc["pct_empresa"] = (sub_calc["n_alto"] / sub_calc["n_total"] * 100).round(2)
-
-        pct_ref = bench_dominio.get(nombre_dom, bench_dominio.get("_promedio_general", prom_general))
+        if sub_all.empty:
+            log.warning("Paso 18: dominio '%s' instrumento '%s' sin filas", nombre_dom, instr_filter)
+            continue
+        total = sub_all.groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_total")
+        alto = sub_all[sub_all["nivel_riesgo"] >= 4].groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_alto")
+        sub_calc = total.merge(alto, on=grupo_cols, how="left")
+        sub_calc["n_alto"] = sub_calc["n_alto"].fillna(0).astype(int)
+        sub_calc["pct_empresa"] = (sub_calc["n_alto"] / sub_calc["n_total"] * 100).round(2)
+        pct_ref = bench_dominio.get(nombre_dom, prom_general)
         for _, row in sub_calc.iterrows():
             diff = round(row["pct_empresa"] - pct_ref, 2)
             resultados.append({
                 **{c: row[c] for c in grupo_cols},
-                "nivel_analisis":    "dominio",
-                "nombre_nivel":      nombre_dom,
-                "forma_intra":       forma if forma else "AB",
-                "n_total":           row["n_total"],
-                "n_alto":            row["n_alto"],
-                "pct_empresa":       row["pct_empresa"],
-                "pct_referencia":    pct_ref,
-                "tipo_referencia":   "colombia",
-                "diferencia_pp":     diff,
-                "semaforo":          semaforo_diff(diff, row["n_total"], n_min),
+                "nivel_analisis":  "dominio",
+                "nombre_nivel":    nombre_dom,
+                "forma_intra":     forma,
+                "n_total":         row["n_total"],
+                "n_alto":          row["n_alto"],
+                "pct_empresa":     row["pct_empresa"],
+                "pct_referencia":  pct_ref,
+                "tipo_referencia": "colombia",
+                "diferencia_pp":   diff,
+                "semaforo":        semaforo_diff(diff, row["n_total"], n_min),
+            })
+
+    # ── Paso 18: Extralaboral y Estrés (nivel='factor') vs Colombia ──────────
+    for instr, forma_label in [("Extralaboral", "AB"), ("Estres", "AB")]:
+        sub_all = fact_baremo[
+            (fact_baremo["nivel_analisis"] == "factor") &
+            (fact_baremo["instrumento"] == instr)
+        ].copy()
+        if sub_all.empty:
+            continue
+        total = sub_all.groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_total")
+        alto = sub_all[sub_all["nivel_riesgo"] >= 4].groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_alto")
+        sub_calc = total.merge(alto, on=grupo_cols, how="left")
+        sub_calc["n_alto"] = sub_calc["n_alto"].fillna(0).astype(int)
+        sub_calc["pct_empresa"] = (sub_calc["n_alto"] / sub_calc["n_total"] * 100).round(2)
+        pct_ref = bench_dominio.get(instr, prom_general)
+        for _, row in sub_calc.iterrows():
+            diff = round(row["pct_empresa"] - pct_ref, 2)
+            resultados.append({
+                **{c: row[c] for c in grupo_cols},
+                "nivel_analisis":  "dominio",
+                "nombre_nivel":    instr,
+                "forma_intra":     forma_label,
+                "n_total":         row["n_total"],
+                "n_alto":          row["n_alto"],
+                "pct_empresa":     row["pct_empresa"],
+                "pct_referencia":  pct_ref,
+                "tipo_referencia": "colombia",
+                "diferencia_pp":   diff,
+                "semaforo":        semaforo_diff(diff, row["n_total"], n_min),
+            })
+
+    # ── Paso 18: Vulnerabilidad = % nivel muy_bajo+bajo en factor Individual ─
+    sub_ind = fact_baremo[
+        (fact_baremo["nivel_analisis"] == "factor") &
+        (fact_baremo["instrumento"] == "Individual")
+    ].copy()
+    if not sub_ind.empty:
+        total = sub_ind.groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_total")
+        vuln = sub_ind[sub_ind["nivel_riesgo"] <= 2].groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_alto")
+        sub_calc = total.merge(vuln, on=grupo_cols, how="left")
+        sub_calc["n_alto"] = sub_calc["n_alto"].fillna(0).astype(int)
+        sub_calc["pct_empresa"] = (sub_calc["n_alto"] / sub_calc["n_total"] * 100).round(2)
+        pct_ref = bench_dominio.get("Individual", prom_general)
+        for _, row in sub_calc.iterrows():
+            diff = round(row["pct_empresa"] - pct_ref, 2)
+            resultados.append({
+                **{c: row[c] for c in grupo_cols},
+                "nivel_analisis":  "dominio",
+                "nombre_nivel":    "Vulnerabilidad",
+                "forma_intra":     "AB",
+                "n_total":         row["n_total"],
+                "n_alto":          row["n_alto"],
+                "pct_empresa":     row["pct_empresa"],
+                "pct_referencia":  pct_ref,
+                "tipo_referencia": "colombia",
+                "diferencia_pp":   diff,
+                "semaforo":        semaforo_diff(diff, row["n_total"], n_min),
             })
 
     # ── Paso 19: dimensiones comparables vs Colombia ──────────────────────────
-    for nombre_dim, pct_ref in bench_dimension.items():
+    # Referencia diferenciada: "Claridad de rol" forma A=20.5%, forma B=5.8%
+    claridad_ref_b = 5.8
+
+    for nombre_dim, pct_ref_base in bench_dimension.items():
         sub_all = fact_baremo[
             (fact_baremo["nivel_analisis"] == "dimension") &
             (fact_baremo["nombre_nivel"] == nombre_dim)
@@ -292,8 +338,10 @@ def construir_benchmark(cfg: dict, fact_baremo: pd.DataFrame, n_min: int) -> pd.
         if sub_all.empty:
             continue
 
-        # Calcular por forma si aplica
         for forma in sub_all["forma_intra"].unique():
+            # Override para Claridad de rol forma B
+            pct_ref = claridad_ref_b if (nombre_dim == "Claridad de rol" and forma == "B") else pct_ref_base
+
             sub_f = sub_all[sub_all["forma_intra"] == forma]
             total = sub_f.groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_total")
             alto = sub_f[sub_f["nivel_riesgo"] >= 4].groupby(grupo_cols, dropna=False)["cedula"].nunique().reset_index(name="n_alto")
@@ -305,16 +353,16 @@ def construir_benchmark(cfg: dict, fact_baremo: pd.DataFrame, n_min: int) -> pd.
                 diff = round(row["pct_empresa"] - pct_ref, 2)
                 resultados.append({
                     **{c: row[c] for c in grupo_cols},
-                    "nivel_analisis":    "dimension",
-                    "nombre_nivel":      nombre_dim,
-                    "forma_intra":       forma,
-                    "n_total":           row["n_total"],
-                    "n_alto":            row["n_alto"],
-                    "pct_empresa":       row["pct_empresa"],
-                    "pct_referencia":    pct_ref,
-                    "tipo_referencia":   "colombia",
-                    "diferencia_pp":     diff,
-                    "semaforo":          semaforo_diff(diff, row["n_total"], n_min),
+                    "nivel_analisis":  "dimension",
+                    "nombre_nivel":    nombre_dim,
+                    "forma_intra":     forma,
+                    "n_total":         row["n_total"],
+                    "n_alto":          row["n_alto"],
+                    "pct_empresa":     row["pct_empresa"],
+                    "pct_referencia":  pct_ref,
+                    "tipo_referencia": "colombia",
+                    "diferencia_pp":   diff,
+                    "semaforo":        semaforo_diff(diff, row["n_total"], n_min),
                 })
 
     return pd.DataFrame(resultados)

@@ -63,44 +63,91 @@ NIVEL 2 — Inversión indicadores gestión (V2-Paso3, script 03):
 ORDEN OBLIGATORIO: Nivel 1 SIEMPRE antes de Nivel 2.
 ```
 
-### R4 — 5 niveles de riesgo normativos
+### R4 — 5 niveles de riesgo normativos con etiquetas por tipo_baremo
 ```
 Los 5 niveles están definidos en la Res. 2764/2022 del MinTrabajo.
 NO se pueden reducir, combinar ni renombrar.
 
-Niveles Batería Res. 2764 (riesgo):
-  1 = Sin riesgo     color: #10B981
-  2 = Bajo           color: #6EE7B7
-  3 = Medio          color: #F59E0B
-  4 = Alto           color: #F97316
-  5 = Muy alto       color: #EF4444
+Columna etiqueta_nivel — texto categorico según tipo_baremo:
 
-Niveles Batería AVANTUM (protección individual):
-  1 = Muy bajo       color: #EF4444 (vulnerabilidad alta)
-  2 = Bajo           color: #F97316
-  3 = Medio          color: #F59E0B
-  4 = Alto           color: #6EE7B7
-  5 = Muy alto       color: #10B981 (mayor protección)
+  tipo "riesgo" (IntraA, IntraB, Extralaboral, Estrés, dominios/dimensiones intra+extra):
+    1 = Sin riesgo       color: #10B981
+    2 = Riesgo bajo      color: #6EE7B7
+    3 = Riesgo medio     color: #F59E0B
+    4 = Riesgo alto      color: #F97316
+    5 = Riesgo muy alto  color: #EF4444
 
-% Vulnerabilidad psicológica = (Muy bajo + Bajo) / Total × 100
+  tipo "afrontamiento_dim" (dimensiones de Afrontamiento):
+    1 = Muy inadecuado   color: #EF4444
+    2 = Inadecuado       color: #F97316
+    3 = Algo adecuado    color: #F59E0B
+    4 = Adecuado         color: #6EE7B7
+    5 = Muy adecuado     color: #10B981
+
+  tipo "capitalpsicologico_dim" (dimensiones de Capital Psicológico):
+    1 = Muy bajo capital psicológico    color: #EF4444
+    2 = Bajo capital psicológico        color: #F97316
+    3 = Medio capital psicológico       color: #F59E0B
+    4 = Alto capital psicológico        color: #6EE7B7
+    5 = Muy alto capital psicológico    color: #10B981
+
+  tipo "individual" (Factor Individual combinado Afrontamiento+CapPsico):
+    1 = Muy bajo   color: #EF4444
+    2 = Bajo       color: #F97316
+    3 = Medio      color: #F59E0B
+    4 = Alto       color: #6EE7B7
+    5 = Muy alto   color: #10B981
+
+  tipo "proteccion" (dominio Estrategias de Afrontamiento):
+    1 = Muy bajo   color: #EF4444
+    2 = Bajo       color: #F97316
+    3 = Medio      color: #F59E0B
+    4 = Alto       color: #6EE7B7
+    5 = Muy alto   color: #10B981
+
+% Vulnerabilidad psicológica = (nivel muy_bajo + bajo) / Total × 100
+  (aplica solo a tipo "individual" y "proteccion")
+```
+
+### R4b — Redondeo de puntaje_transformado a 1 decimal
+```
+puntaje_transformado = round(puntaje_bruto / transformacion_max × 100, 1)
+
+REGLA: Siempre redondear a 1 decimal antes de aplicar los puntos de corte.
+RAZÓN: Un puntaje como 25.85 redondeado a 2 decimales puede clasificarse en un nivel
+  diferente que 25.9 redondeado a 1 decimal. La Resolución 2764/2022 usa puntos de corte
+  con 1 decimal; el redondeo al mismo nivel garantiza coherencia.
+
+NUNCA usar 2 decimales ni sin redondear en puntaje_transformado.
 ```
 
 ### R5 — Benchmarking: sectorial vs Colombia
 ```
-Benchmarking SECTORIAL (solo intralaboral total):
+Benchmarking SECTORIAL (Paso 17 — solo intralaboral total):
   Fuente: III Encuesta Nacional SST 2021
-  Métrica: % Alto+Muy alto en factor intralaboral total
-  Comparar empresa vs sector (9 sectores disponibles)
+  Métrica: % trabajadores nivel_riesgo >= 4 en factor IntraA / IntraB por empresa
+  Comparar empresa vs sector (config.yaml → benchmark_sector)
   PROHIBIDO: NO usar datos sectoriales para dominios o dimensiones
 
-Benchmarking COLOMBIA (factor + dominios + dimensiones):
+Benchmarking COLOMBIA (Pasos 18-19 — dominios y dimensiones):
   Fuente: II+III ENCST (2013 + 2021 combinadas)
-  Métrica: % Alto+Muy alto por factor / dominio / dimensión
-  Referencias:
-    Factor intralaboral: 39.7% (promedio general)
-    Dominios: Demandas 43.9% | Estrés 32.9% | Extralaboral 26.3%
-              Control 16.9% | Liderazgo 13.3% | Recompensas 3.3%
-    Dimensiones: Carga mental 58.2% | Emocionales 49.4% | Cuantitativas 39.2%
+  Métrica: % trabajadores nivel_riesgo >= 4 por dominio / dimensión
+  Excepción Vulnerabilidad (Paso 18): % nivel_riesgo <= 2 en factor Individual
+
+  Dominios (nombre_nivel exacto en fact_scores_baremo):
+    "Demandas del trabajo"             43.9%
+    "Control sobre el trabajo"         16.9%
+    "Liderazgo y relaciones sociales"  13.3%
+    "Recompensas"                       3.3%
+    "Extralaboral" (factor)            26.3%
+    "Estres" (factor)                  32.9%
+    Vulnerabilidad ("Individual" <=2)   4.2%
+
+  Dimensiones comparables (11 en total — ver pipeline.md Paso 19 para lista completa)
+    Carga mental 58.2% | Emocionales 49.4% | Cuantitativas 39.2%
+    Claridad de rol: A=20.5% / B=5.8% (diferenciada por forma)
+
+  Semáforo: rojo si diferencia_pp > 0 | verde si <= 0 | insuficiente si n < 5 (R8)
 ```
 
 ### R6 — LEFT JOIN en ausentismo

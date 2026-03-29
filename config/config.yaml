@@ -41,32 +41,35 @@ benchmark_sector:
 
 # Benchmarking Colombia — Paso 18: % Alto+MuyAlto por dominio
 # Fuente: II y III Encuesta Condiciones de Salud y Trabajo 2013-2021
-# Claves en snake_case — coincidir con nombre_nivel en fact_scores_baremo
+# Claves = nombre_nivel exacto en fact_scores_baremo (nivel_analisis='dominio' o 'factor')
 benchmark_dominio:
-  "demandas_del_trabajo":                43.90
-  "control_sobre_el_trabajo":            16.90
-  "liderazgo_relaciones_sociales":       13.30
-  "recompensas":                          3.30
-  "extralaboral":                        26.30
-  "estres":                             32.90
-  "vulnerabilidad":                       4.20
-  "_promedio_general":                   39.69
+  "Demandas del trabajo":            43.90   # IntraA/B dominio
+  "Control sobre el trabajo":        16.90   # IntraA/B dominio
+  "Liderazgo y relaciones sociales": 13.30   # IntraA/B dominio
+  "Recompensas":                      3.30   # IntraA/B dominio
+  "Extralaboral":                    26.30   # factor Extralaboral A/B
+  "Estres":                          32.90   # factor Estrés A/B
+  "Individual":                       4.20   # factor Individual (% nivel muy_bajo+bajo = vulnerabilidad)
+  "_promedio_general":               39.69
 
 # Benchmarking Colombia — Paso 19: % Alto+MuyAlto por dimensión
 # Fuente: II y III Encuesta Condiciones de Salud y Trabajo 2013-2021
+# Claves = nombre_nivel exacto en fact_scores_baremo (nivel_analisis='dimension')
+# Claridad de rol tiene referencias diferentes por forma: A=20.5, B=5.8 (se maneja en script)
 benchmark_dimension:
-  "Demandas de carga mental":                                    58.2
-  "Demandas emocionales":                                        49.4
-  "Demandas cuantitativas":                                      39.2
-  "Características del liderazgo":                               25.9
-  "Control y autonomía sobre el trabajo":                        22.1
-  "Influencia del trabajo sobre el entorno extralaboral":        21.5
-  "Claridad de rol":                                             20.5
-  "Oportunidades para el uso y desarrollo de habilidades y conocimientos": 18.4
-  "Capacitación":                                                11.0
-  "Relaciones sociales en el trabajo":                           10.1
-  "Supuesto acoso laboral":                                       8.2
-  "Claridad del rol B":                                           5.8
+  "Demandas de carga mental":                                 58.2
+  "Demandas emocionales":                                     49.4
+  "Demandas cuantitativas":                                   39.2
+  "Características del liderazgo":                            25.9
+  "Control y autonomía sobre el trabajo":                     22.1
+  "Influencia del trabajo sobre el entorno extra":            21.5   # IntraA/B
+  "Influencia del entorno extralaboral sobre el trabajo":     21.5   # Extralaboral
+  "Claridad de rol":                                          20.5   # forma A (B usa 5.8 en script)
+  "Oportunidades de desarrollo y uso de habilidad":           18.4   # nombre real en data
+  "Capacitación":                                             11.0
+  "Relaciones sociales en el trabajo":                        10.1
+# Nota: "Claridad de rol" forma B → 5.8% (se aplica como override en 06_benchmarking.py)
+# Nota: "Supuesto acoso laboral" no existe en este dataset — no incluir
 
 # Semáforo (R5)
 semaforo_rojo_pct: 35.0   # Si empresa_pct > 35% → rojo
