@@ -156,7 +156,7 @@ INCONSISTENCIA DETECTADA:
 | `scripts/06_benchmarking.py` | ✅ Completo | `fact_benchmark.parquet` + `fact_riesgo_empresa.parquet` |
 | `scripts/07_frecuencias_preguntas.py` | ✅ Completo | `fact_frecuencias.parquet` + `fact_top20_comparables.parquet` |
 | `scripts/08_consolidacion.py` | ✅ Completo | `fact_consolidado.parquet` |
-| `Dashboards/dashboard_v1_riesgo.py` | ✅ Completo (pendiente validar con datos reales) | `output/dashboard_v1_riesgo.html` |
+| `API/endpoints_v1.py` (ejemplo) | ⏳ Pendiente | Servir los datos a Next.js (Visualizador 1) |
 
 ### Scripts pendientes
 | Script | Depende de | Prioridad |
@@ -165,15 +165,15 @@ INCONSISTENCIA DETECTADA:
 | `scripts/04_categorias_gestion.py` | 03 | V2 |
 | `scripts/05_prioridades_protocolos.py` | 04 | V2 |
 | `scripts/09_asis_costos.py` | V4 insumos | V4 |
-| `Dashboards/dashboard_v2_gestion.py` | 03-05 + usuario | V2 |
-| `Dashboards/dashboard_v3_gerencial.py` | 08 + usuario | V3 |
-| `Dashboards/dashboard_v4_asis.py` | 09 + usuario | V4 |
+| `api/endpoint_v2_gestion.py` | 03-05 + usuario | V2 |
+| `api/endpoint_v3_gerencial.py` | 08 + usuario | V3 |
+| `api/endpoint_v4_asis.py` | 09 + usuario | V4 |
 
 ### Próximos pasos inmediatos
-1. Usuario ejecuta pipeline V1 localmente y reporta resultados/errores
-2. Ajustar scripts según feedback de datos reales
-3. Una vez V1 aprobado → usuario provee insumos de V2 (pasos del modelo de gestión)
-4. Iterar: validar → codificar → verificar → siguiente visualizador
+1. Usuario ejecuta pipeline V1 localmente y reporta resultados/errores (Solo en `.parquet`)
+2. Ajustar y validar perfección de los scripts ETL V1, V2, V3
+3. Módulos API: Desarrollar Endpoints (FastAPI) para servir `.parquet`
+4. Iterar hacia Frontend: Una vez la API funcione, iniciar desarrollo de interfaces UI en Next.js
 
 ---
 
@@ -225,8 +225,7 @@ def validar_nombre_tabla(df: pd.DataFrame) -> tuple[bool, pd.DataFrame]:
 | Normativa | Resolución 2764/2022 Ministerio de Trabajo Colombia |
 | Archivo hechos | `data/raw/Resultado_mentalPRO.xlsx` (hoja: FactRespuestas) |
 | Archivo dims | `data/raw/datasets.xlsx` |
-| Output dashboards | `output/dashboard_v*.html` (HTML estático, sin servidor) |
-| Canvas dashboards | 3000×2000 px, vertical |
+| Output dashboards | Desplegado vía Next.js (Interfaces responsivas) consumiendo la API. |
 
 ---
 

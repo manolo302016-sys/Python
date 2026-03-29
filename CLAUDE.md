@@ -6,12 +6,12 @@ Cuando trabajes en cualquier archivo de `Dashboards/`, activa estos skills:
 - `/kpi-dashboard-design` — diseño de métricas, layout, visualizaciones
 - `/data-storytelling` — narrativa ejecutiva, estructura de insights, presentación a stakeholders
 
-## Stack técnico (inamovible)
+## Stack técnico (Frontend Web Moderno / Opción 3)
 
-- Python 3.11+ / pandas / pyarrow / plotly
-- **NO Dash, NO FastAPI** — `plotly.io.write_html(full_html=True, include_plotlyjs='cdn')`
-- Config: `config/config.yaml`
-- Outputs HTML en `output/`
+- **Backend (ETL y API):** Python 3.11+ / pandas / pyarrow / FastAPI
+- **Frontend (Visualizadores):** Next.js / React / TailwindCSS / Recharts / Tremor
+- Config Backend: `config/config.yaml`
+- El ETL termina generando archivos `.parquet` en `data/processed/`, los cuales serán consumidos por el Frontend vía FastAPI. Ya no se generan HTMLs estáticos.
 
 ## Paleta R11 — inamovible
 
@@ -27,15 +27,15 @@ FONT  = "Inter, Arial, sans-serif"
 
 ## Reglas de negocio obligatorias
 
-- **R8 Confidencialidad**: grupos < 5 personas → mostrar "Confidencial" en lugar del dato
-- **Lienzo**: desplazamiento vertical, 3000 × 2000 px, UX/UI alta fidelidad
-- **Umbrales semáforo KPI**: >35% = rojo | 15–34% = amarillo | <15% = verde
-- **Referente sector**: si el sector no tiene dato, usar referente país (ENCST)
-- **1 HTML por empresa** — el dashboard es por empresa, no consolidado
+- **Regla R8 Confidencialidad**: grupos < 5 personas → el backend debe enviar alerta de "Confidencial" en lugar del dato para que el frontend no lo dibuje.
+- **Lienzo**: Diseño responsivo y dinámico (delegado a los componentes de Next.js).
+- **Umbrales semáforo KPI**: >35% = rojo | 15–34% = amarillo | <15% = verde (Lógica gestionada en el backend para enviar el token correcto al front).
+- **Referente sector**: si el sector no tiene dato, usar referente país (ENCST).
+- **Dashboard Cliente/Servidor**: El backend surte múltiples empresas, el frontend filtra.
 
 ---
 
-## Visualizador 1: `dashboard_v1_riesgo.py`
+## Visualizador 1: Riesgo Psicosocial (Migración a Web)
 
 **Archivos fuente** (parquet en `data/processed/`): resultados baremos, benchmarking, frecuencias preguntas, consolidación demográfica.
 
@@ -67,17 +67,13 @@ FONT  = "Inter, Arial, sans-serif"
 
 ---
 
-## Visualizador 2: `dashboard_v2_gestion.py` (pendiente)
+## Visualizadores 2, 3 y 4 (Pendientes de Endpoint)
 
-Secciones: Resultados por eje/línea de gestión · Indicadores de gestión · Top 10 indicadores × áreas
+- **Visualizador 2 (Gestión):** Resultados por eje/línea, indicadores y Top 10 indicadores × áreas.
+- **Visualizador 3 (Gerencial):** Ficha técnica, resultados globales + benchmarking, 3 ejes de gestión, Ranking áreas top 5 y protocolos prioritarios.
+- **Visualizador 4 (ASIS):** Distribución demográfica, perfil laboral, salud/costos ausentismo.
 
-## Visualizador 3: `dashboard_v3_gerencial.py` (pendiente)
-
-Secciones: Ficha técnica · Resultados globales + benchmarking · 3 ejes de gestión · Ranking áreas top 5 · 5 protocolos prioritarios por sector
-
-## Visualizador 4: `dashboard_v4_asis.py` (pendiente)
-
-Secciones: Distribución demográfica · Perfil laboral · Condiciones de salud/costos (ausentismo CIE, prevalencia, días, costos productividad)
+*(Los scripts en Python correspondientes a v2, v3 y v4 funcionarán exclusivamente como tuberías hacia los endpoints de FastAPI).*
 
 ---
 

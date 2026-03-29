@@ -240,6 +240,9 @@ Colores primarios AVANTUM:
   navy   = '#0A1628'  Fondo principal
   gold   = '#C9952A'  Acento, CTAs
   cyan   = '#00C2CB'  IA, tecnología
+
+REGLA: El backend NUNCA se encarga de inyectar colores en gráficas. El backend (Python) mapea
+el nivel 1-5 y envía la estructura de datos al Frontend (Next.js). Tailwind CSS implementa la paleta.
 ```
 
 ### R12 — No rutas absolutas
@@ -333,21 +336,17 @@ NO crear scripts separados por empresa.
 NO hardcodear nombres de empresas en los scripts.
 ```
 
-### R19 — Dashboards HTML estático (sin servidor)
+### R19 — Dashboards Cliente-Servidor Web (Next.js / API)
 ```
-Los 4 dashboards se exportan como archivos HTML autocontenidos.
-NO se usa Dash, FastAPI ni ningún servidor web.
+La arquitectura final de visualización confía en un enfoque Dashboard Cliente/Servidor.
 
-Exportación obligatoria:
-  plotly.io.write_html(fig, full_html=True, include_plotlyjs='cdn')
+El ETL en backend produce Parquets que serán enrutados por servicios API (Ej. FastAPI),
+mientras un Frontend en Next.js/React los consume para renderizar interacciones avanzadas.
 
-Interactividad: Plotly nativo + JavaScript vanilla para filtros (empresa, forma A/B).
-Canvas: 3000×2000 px, orientación vertical, una sola página por dashboard.
-Apertura: doble clic en el archivo .html → cualquier navegador moderno.
-
-Filtros JS: Se generan bloques HTML por combinación empresa×forma;
-  JavaScript muestra/oculta bloques según selección del dropdown.
-  No requiere backend ni CORS.
+Reglas del Frontend (Dashboard Web):
+  - Canvas fluido 100% responsivo.
+  - El frontend no hace cálculos estadísticos pesados, solo rendering e IA reactiva.
+  - Filtros: Consumen API y filtran dinámicamente en UI con Recharts/Tremor.
 ```
 
 ### R20 — Documento marco como fuente de verdad

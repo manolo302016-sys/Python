@@ -17,10 +17,7 @@
 | 07_frecuencias_preguntas.py | V1-Paso20 | fact_frecuencias |
 | 08_consolidacion.py | V1-Paso21 · V3-Paso1 (19 KPIs) | fact_consolidado + fact_kpis_gerenciales |
 | 09_costo_ausentismo.py | V4-Paso1 (fórmula 6 pasos) | fact_costo_ausentismo |
-| dashboard_v1_riesgo.py | V1-Paso21 layout completo V1 | — |
-| dashboard_v2_gestion.py | V2-Paso8 layout completo V2 | — |
-| dashboard_v3_gerencial.py | V3-Paso1 layout ejecutivo | — |
-| dashboard_v4_asis.py | V4-Paso1 layout ASIS | — |
+| Endpoints FastAPI (A desarrollar) | Exposición de datos para renderizado en Frontend (Next.js) | JSON vía API |
 
 ---
 

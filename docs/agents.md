@@ -15,14 +15,13 @@ CAPA 1: EVALUACIÓN
   FactRespuestas: 180,617 filas × 10 columnas
   2 formas del instrumento: A (jefes, 125 preguntas) y B (operativos, 97 preguntas)
 
-CAPA 2: ANÁLISIS Y VISUALIZACIÓN  ← ESTE REPOSITORIO
-  ETL → Scoring → Baremos → Gestión → Benchmarking → 4 Dashboards HTML estáticos
-  Stack: Python 3.11+ / pandas / plotly (standalone HTML) / scikit-learn
+CAPA 2: BACKEND Y API (PYTHON)  ← ESTE REPOSITORIO
+  ETL → Scoring → Baremos → Gestión → Benchmarking → Parquets
+  Stack: Python 3.11+ / pandas / scikit-learn / FastAPI (Para consumir Parquets)
 
-CAPA 3: MOTOR RAG (sistema externo)
-  Corpus v5: 4,178 chunks / 20 protocolos PROT-01…PROT-20
-  Input: JSON_RAG_OUTPUT generado por este pipeline
-  Output: Planes de gestión PHVA personalizados por empresa
+CAPA 3: FRONTEND Y VISUALIZADORES (SISTEMA EXTERNO / NEXT.JS)
+  Input: Endpoints JSON expuestos por la Capa 2
+  Output: Dashboards Dinámicos, Componentes interactivos, Motor RAG PHVA
 ```
 
 ---
@@ -62,8 +61,8 @@ Dashboards/dashboard_v4_asis.py        → Visualizador 4 → output/dashboard_v
 | R8 | ASIGNAR = empresa real. No filtrar ni excluir. |
 | R9 | Sector map: 30+ aliases normalizados en 01_etl_star_schema.py → SECTOR_MAP. Desconocido → 'No clasificado'. |
 | R10 | Media ponderada en gestión: NUNCA promedio simple en fact_gestion_scores. |
-| R11 | Dashboards = HTML estático local. Export: `plotly.io.write_html(full_html=True, include_plotlyjs='cdn')`. NO usar Dash server. |
-| R12 | Canvas dashboards: 3000×2000 px, orientación vertical, una sola página HTML. |
+| R11 | Frontend desacoplado. Backend expone APIs. NO generar gráficos Plotly estáticos en HTML. |
+| R12 | Diseño responsivo: Delegado completamente a Tailwind / Next.js en la Capa 3. |
 
 ---
 
@@ -77,8 +76,8 @@ mentalPRO/
 │   │   └── datasets.xlsx
 │   └── processed/              # Parquets generados por los scripts
 ├── scripts/                    # 01_etl_star_schema.py → 09_asis_costos.py
-├── Dashboards/                 # dashboard_v1_riesgo.py … dashboard_v4_asis.py
-├── output/                     # HTMLs generados (dashboard_v1_riesgo.html, etc.)
+├── api/                        # Proximos Endpoints FastAPI
+├── output/                     # Reservado / Deprecado
 ├── config/config.yaml
 └── docs/                       # Documentación del proyecto
 ```
@@ -100,8 +99,11 @@ plotly>=5.18.0
 scipy>=1.12.0
 scikit-learn>=1.4.0
 
-# NO requerido: dash, fastapi, uvicorn — los dashboards son HTML estático
-```
+# API y Backend Web (Opción 3)
+fastapi>=0.108.0
+uvicorn>=0.27.0
+pydantic>=2.5.0
+# NO requerido localmente: dash, react (se manejan en frontend)
 
 ---
 
@@ -120,14 +122,8 @@ python scripts/07_frecuencias_preguntas.py  # → data/processed/fact_frecuencia
 python scripts/08_consolidacion.py          # → data/processed/fact_consolidado.parquet
 python scripts/09_asis_costos.py            # → data/processed/fact_asis.parquet + fact_costo_ausentismo.parquet
 
-# Dashboards → HTML estático (no requieren servidor)
-python Dashboards/dashboard_v1_riesgo.py    # → output/dashboard_v1_riesgo.html
-python Dashboards/dashboard_v2_gestion.py   # → output/dashboard_v2_gestion.html
-python Dashboards/dashboard_v3_gerencial.py # → output/dashboard_v3_gerencial.html
-python Dashboards/dashboard_v4_asis.py      # → output/dashboard_v4_asis.html
-
-# Abrir en navegador (doble clic o):
-start output\dashboard_v1_riesgo.html       # Windows
+# API Endpoints (Reemplazan Dashboards)
+# Próximamente: uvicorn api.main:app --reload
 ```
 
 ---

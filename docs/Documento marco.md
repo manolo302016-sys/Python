@@ -16,8 +16,8 @@
 ## Las variables adicionales de la tabla categorías_analisis funcionan como dimensiones para filtrar y segmentar los resultados: factor(string), dimensión(string), pregunta(string),protocolo_id(string), protocolo_gestion(string)##.
 
 ## 2.	Requerimientos de los dashboard entregables ##
-## Lineamientos para generar visualizador 1: dashboardriesgo.py##
-## debe ser un lienzo que se desplace en vertical de 3000 x 2000 que siga lineamientos UX/UI de alta fidelidad en visualizadores de alto impacto, profesional, confiable, usuarios empresariales y técnicos##
+## Lineamientos para generar visualizador 1##
+## debe ser un lienzo que se desplace en vertical que siga lineamientos UX/UI de alta fidelidad en visualizadores de alto impacto, profesional, confiable, usuarios empresariales y técnicos##
 
 ## Estructura de visualizador ##
 ## Seccion 0 : Head o encabezado#
@@ -428,13 +428,13 @@
 ## paso 21##
 ## 21. Revisar calculos de los 20 pasos anteriores y verificar que los resultados sean correctos##
 ## paso 22##
-## 22. Segun plan de analisis del visualizador 1, estimar lo que se requiere para el visualizador 1, y ejecutarlo##
+## 22. Preparar los datos consolidados en formato parquet o base de datos relacional para consumirse mediante API por el Frontend (Next.js)##
 
 
 
-2. visualizador 2: dashboard_v2_gestion
-3. visualizador 3: dashboard_v3_gerencial
-4. visualizador 4: dashboard_v4_asis
+2. Visualizador 2: Gestión de Indicadores (Dashboard Frontend Next.js)
+3. Visualizador 3: Resumen Gerencial y ROI (Dashboard Frontend Next.js)
+4. Visualizador 4: Variables Demográficas y Costos de Ausentismo (Dashboard Frontend Next.js)
 
-##pasos para la creacion de los dashboards##
-1. 
+## Notas Arquitectónicas sobre visualizadores ##
+> El diseño visual, lienzo responsivo, componentes interactivos y despliegue final (Visualizador 1, 2, 3 y 4) están delegados al Frontend implementando Next.js/React. El pipeline de datos en Python culmina con la disponibilidad de las bases analíticas que aseguran fidelidad con las reglas establecidas en este documento.
