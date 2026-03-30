@@ -26,6 +26,9 @@ def read_root():
         "timestamp": time.time()
     }
 
-# IMPORTANTE:
-# Los routers como v1_riesgo y v2_gestion se inyectarán aquí
-# cuando el usuario defina los nuevos endpoints en el Documento Marco.
+from .routers import v1_riesgo
+
+# Registrar routers
+app.include_router(v1_riesgo.router)
+
+# Los routers v2_gestion, v3_gerencial, v4_asis se añadirán tras validación ETL.
