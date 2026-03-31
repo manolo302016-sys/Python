@@ -64,18 +64,18 @@
 ## las preguntas se agrupan en indicadores, los indicadores se agrupan en líneas de gestión y las líneas de gestión se agrupan en ejes de gestión. A su vez, cada línea de gestión tiene asociado los protocolos de gestión, los cuales serán consumidos por el sistema RAG en fase posterior. La tabla corresponde a la tabla dimensional categorias_analisis, detalla la agrupación que debe aplicarse para el visualizador 2 del modelo conceptual de base, se detalla la pregunta, la forma a la que corresponde, el factor, dimension y pregunta que vienen de la agrupación original del modelo aplicado en el visualizador 1. Lo anterior agrupado en indicadores, líneas de gestión, protocolos y ejes de gestion. A cada trabajador se asigna las variables del modelo de gestion, para que en pasos posteriores,se asigne el resultado de cada componente del modelo ## 
 ## |id_pregunta | forma_intra| factor| dimension| pregunta_texto| indicador| protocolo_id| protocolo_nombre| linea_gestion| eje_gestion##
 
-## |12_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento activo_busquedasoporte|Le pregunto a alguien con mayor experiencia sobre el tema|Activa red de apoyo|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |5_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento evitativo_negación|Me digo a mí mismo: "esto no es real"|Autonegación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |9_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento activo_busquedasoporte|Busco alguna ayuda profesional|Busqueda de Apoyo profesional|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |10_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento activo_busquedasoporte|Consigo que otras personas me ayuden o aconsejen|Busqueda de consejo y orientación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |11_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento activo_busquedasoporte|Consigo el consuelo o la comprensión de alguien|Busqueda de soporte emocional|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |1_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento activo_planificación|Concentro mis esfuerzos en hacer algo sobre la situación en la que estoy|Dedicación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |7_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento evitativo_negación|Me niego a creer que haya sucedido|Evitación cognitiva|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |8_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento evitativo_negación|Intento distraerme o pensar en otra cosa|Evitación conductual|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |2_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento activo_planificación|Tomo medidas para intentar que la situación mejore|Orientación a la acción|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |4_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento activo_planificación|Pienso detenidamente sobre los pasos a seguir|Planificación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
-## |3_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento activo_planificación|Intento proponer una estrategia sobre qué hacer|Propositividad|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |6_capitalpsicologico|A_y_B|Estrés - individual|Afrontamiento evitativo_negación|Renuncio a intentar ocuparme de ello|Renuncia|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |12_afrontamiento|A_y_B|Estrés - individual|Afrontamiento activo_busquedasoporte|Le pregunto a alguien con mayor experiencia sobre el tema|Activa red de apoyo|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |5_afrontamiento|A_y_B|Estrés - individual|Afrontamiento evitativo_negación|Me digo a mí mismo: "esto no es real"|Autonegación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |9_afrontamiento|A_y_B|Estrés - individual|Afrontamiento activo_busquedasoporte|Busco alguna ayuda profesional|Busqueda de Apoyo profesional|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |10_afrontamiento|A_y_B|Estrés - individual|Afrontamiento activo_busquedasoporte|Consigo que otras personas me ayuden o aconsejen|Busqueda de consejo y orientación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |11_afrontamiento|A_y_B|Estrés - individual|Afrontamiento activo_busquedasoporte|Consigo el consuelo o la comprensión de alguien|Busqueda de soporte emocional|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |1_afrontamiento|A_y_B|Estrés - individual|Afrontamiento activo_planificación|Concentro mis esfuerzos en hacer algo sobre la situación en la que estoy|Dedicación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |7_afrontamiento|A_y_B|Estrés - individual|Afrontamiento evitativo_negación|Me niego a creer que haya sucedido|Evitación cognitiva|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |8_afrontamiento|A_y_B|Estrés - individual|Afrontamiento evitativo_negación|Intento distraerme o pensar en otra cosa|Evitación conductual|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |2_afrontamiento|A_y_B|Estrés - individual|Afrontamiento activo_planificación|Tomo medidas para intentar que la situación mejore|Orientación a la acción|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |4_afrontamiento|A_y_B|Estrés - individual|Afrontamiento activo_planificación|Pienso detenidamente sobre los pasos a seguir|Planificación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial
+## |3_afrontamiento|A_y_B|Estrés - individual|Afrontamiento activo_planificación|Intento proponer una estrategia sobre qué hacer|Propositividad|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |6_afrontamiento|A_y_B|Estrés - individual|Afrontamiento evitativo_negación|Renuncio a intentar ocuparme de ello|Renuncia|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
 ## |10_estres|A_y_B|Estrés - individual|Respuestas cognitivas de estrés|Dificultad para permanecer quieto o dificultad para iniciar actividades|Alteraciones cognitivas|PROT-02|Bienestar cognitivo|Bienestar cognitivo|Bienestar biopsicosocial##
 ## |14_estres|A_y_B|Estrés - individual|Respuestas cognitivas de estrés|Dificultad para concentrarse, olvidos frecuentes|Alteraciones cognitivas|PROT-02|Bienestar cognitivo|Bienestar cognitivo|Bienestar biopsicosocial##
 ## |21_estres|A_y_B|Estrés - individual|Respuestas cognitivas de estrés|Dificultad para tomar decisiones|Alteraciones cognitivas|PROT-02|Bienestar cognitivo|Bienestar cognitivo|Bienestar biopsicosocial##
@@ -146,18 +146,18 @@
 ## |11_extra|A_y_B|Extralaboral|Características de la vivienda y de su entorno|En mi vivienda hay servicio de agua y luz|Condiciones de la vivienda|PROT-06|Bienestar extralaboral|Bienestar extralaboral|Bienestar biopsicosocial##
 ## |12_extra|A_y_B|Extralaboral|Características de la vivienda y de su entorno|Las condiciones de mi vivienda me permiten descansar cuando lo quiero|Condiciones de la vivienda|PROT-06|Bienestar extralaboral|Bienestar extralaboral|Bienestar biopsicosocial##
 ## |13_extra|A_y_B|Extralaboral|Características de la vivienda y de su entorno|Las condiciones de mi vivienda me permiten sentirme cómodo|Condiciones de la vivienda|PROT-06|Bienestar extralaboral|Bienestar extralaboral|Bienestar biopsicosocial##
-## |9_afrontamiento|A_y_B|Estrés - individual|Resiliencia|Considero los obstáculos como retos que puedo superar|Actitud resiliente|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |7_afrontamiento|A_y_B|Estrés - individual|Resiliencia|Las experiencias difíciles de mi vida me han llevado a hacer cosas que no habia pensado ser capaz de hacer|Aprendizaje resiliente|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |10_afrontamiento|A_y_B|Estrés - individual|Autoeficacia|Estoy seguro de que puedo manejar situaciones difíciles|Autoeficacia percibida|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |5_afrontamiento|A_y_B|Estrés - individual|Esperanza|Es posible alcanzar las metas que me he propuesto en la vida|Convicción por las metas|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |6_afrontamiento|A_y_B|Estrés - individual|Esperanza|Creo que con esfuerzo y dedicación se pueden lograr los objetivos|Esfuerzo y dedicación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |4_afrontamiento|A_y_B|Estrés - individual|Esperanza|Aún en momentos de dificultad creo que es posible un futuro mejor|Esperanza del futuro|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |1_afrontamiento|A_y_B|Estrés - individual|Optimismo|Me mantengo firme en la lucha por alcanzar mis metas|Firmeza y perseverancia|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |12_afrontamiento|A_y_B|Estrés - individual|Autoeficacia|Las cosas buenas que pasen dependen de mis acciones|Locus de control interno|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |2_afrontamiento|A_y_B|Estrés - individual|Optimismo|Estoy convencido(a) que me esperan cosas buenas en la vida|Optimismo del porvenir|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |3_afrontamiento|A_y_B|Estrés - individual|Optimismo|Cuando un plan me falla busco otras opciones que funcionen para cumplir el objetivo|Resolutividad|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |11_afrontamiento|A_y_B|Estrés - individual|Autoeficacia|A menudo siento que soy capaz de hacer lo que me propongo|Sensación de logro|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
-## |8_afrontamiento|A_y_B|Estrés - individual|Resiliencia|Puedo recuperarme rápidamente después de experimentar dificultades|Superación de adversidades|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |9_capitalpsicologico|A_y_B|Estrés - individual|Resiliencia|Considero los obstáculos como retos que puedo superar|Actitud resiliente|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |7_capitalpsicologico|A_y_B|Estrés - individual|Resiliencia|Las experiencias difíciles de mi vida me han llevado a hacer cosas que no habia pensado ser capaz de hacer|Aprendizaje resiliente|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |10_capitalpsicologico|A_y_B|Estrés - individual|Autoeficacia|Estoy seguro de que puedo manejar situaciones difíciles|Autoeficacia percibida|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |5_capitalpsicologico|A_y_B|Estrés - individual|Esperanza|Es posible alcanzar las metas que me he propuesto en la vida|Convicción por las metas|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |6_capitalpsicologico|A_y_B|Estrés - individual|Esperanza|Creo que con esfuerzo y dedicación se pueden lograr los objetivos|Esfuerzo y dedicación|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |4_capitalpsicologico|A_y_B|Estrés - individual|Esperanza|Aún en momentos de dificultad creo que es posible un futuro mejor|Esperanza del futuro|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |1_capitalpsicologico|A_y_B|Estrés - individual|Optimismo|Me mantengo firme en la lucha por alcanzar mis metas|Firmeza y perseverancia|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |12_capitalpsicologico|A_y_B|Estrés - individual|Autoeficacia|Las cosas buenas que pasen dependen de mis acciones|Locus de control interno|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |2_capitalpsicologico|A_y_B|Estrés - individual|Optimismo|Estoy convencido(a) que me esperan cosas buenas en la vida|Optimismo del porvenir|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |3_capitalpsicologico|A_y_B|Estrés - individual|Optimismo|Cuando un plan me falla busco otras opciones que funcionen para cumplir el objetivo|Resolutividad|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |11_capitalpsicologico|A_y_B|Estrés - individual|Autoeficacia|A menudo siento que soy capaz de hacer lo que me propongo|Sensación de logro|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
+## |8_capitalpsicologico|A_y_B|Estrés - individual|Resiliencia|Puedo recuperarme rápidamente después de experimentar dificultades|Superación de adversidades|PROT-01|Afrontamiento del estrés y recursos psicológicos|Afrontamiento del estrés y recursos psicológicos|Bienestar biopsicosocial##
 ## |54_intra|A|Intralaboral|Claridad de rol|Me informan cuáles son las decisiones que puedo tomar en mi trabajo|Autonomía decisional|PROT-11|Arquitectura de roles y responsabilidades|Arquitectura de roles y responsabilidades|Condiciones de trabajo saludable##
 ## |53_intra|A|Intralaboral|Claridad de rol|Me informan con claridad cuáles son mis funciones|Claridad en funciones y objetivos del rol|PROT-11|Arquitectura de roles y responsabilidades|Arquitectura de roles y responsabilidades|Condiciones de trabajo saludable##
 ## |55_intra|A|Intralaboral|Claridad de rol|Me explican claramente los resultados que debo lograr en mi trabajo|Claridad en funciones y objetivos del rol|PROT-11|Arquitectura de roles y responsabilidades|Arquitectura de roles y responsabilidades|Condiciones de trabajo saludable##
@@ -379,31 +379,30 @@
 ## 3.1 Calificar preguntas en indicadores con pesos relativos ##
 ## Antes de calificar el indicador, se invierte el sentido de la pregunta al indicador cuando aplique (escala 0 a 1) con formula (1 – valor). Se detalla cuando aplica esta inversión con true, false. Se debe aplicar la fórmula de invertir de manera discriminada a las preguntas que aplican en cada indicador tanto para A como para B, como las que aplican solo para A o solo para B A cada trabajador se le invierte su resultado segun corresponda##
 ## |forma_intra| id_pregunta| invertir_id_respuesta|##
-## |A_y_B|9_afrontamiento|FALSE|
-## |A_y_B|12_capitalpsicologico|FALSE|
-## |A_y_B|7_afrontamiento|FALSE|
-## |A_y_B|10_afrontamiento|FALSE|
-## |A_y_B|5_capitalpsicologico|TRUE|
+## |A_y_B|1_capitalpsicologico|FALSE|
+## |A_y_B|2_capitalpsicologico|FALSE|
+## |A_y_B|3_capitalpsicologico|FALSE|
+## |A_y_B|4_capitalpsicologico|FALSE|
+## |A_y_B|5_capitalpsicologico|FALSE|
+## |A_y_B|6_capitalpsicologico|FALSE|
+## |A_y_B|7_capitalpsicologico|FALSE|
+## |A_y_B|8_capitalpsicologico|FALSE|
 ## |A_y_B|9_capitalpsicologico|FALSE|
 ## |A_y_B|10_capitalpsicologico|FALSE|
 ## |A_y_B|11_capitalpsicologico|FALSE|
-## |A_y_B|5_afrontamiento|FALSE|
-## |A_y_B|1_capitalpsicologico|FALSE|
-## |A_y_B|6_afrontamiento|FALSE|
-## |A_y_B|4_afrontamiento|FALSE|
-## |A_y_B|7_capitalpsicologico|TRUE|
-## |A_y_B|8_capitalpsicologico|TRUE|
+## |A_y_B|12_capitalpsicologico|FALSE|
 ## |A_y_B|1_afrontamiento|FALSE|
-## |A_y_B|12_afrontamiento|FALSE|
-## |A_y_B|13_afrontamiento|FALSE|
 ## |A_y_B|2_afrontamiento|FALSE|
-## |A_y_B|2_capitalpsicologico|FALSE|
-## |A_y_B|4_capitalpsicologico|FALSE|
-## |A_y_B|3_capitalpsicologico|FALSE|
-## |A_y_B|6_capitalpsicologico|FALSE|
 ## |A_y_B|3_afrontamiento|FALSE|
+## |A_y_B|4_afrontamiento|FALSE|
+## |A_y_B|5_afrontamiento|TRUE|
+## |A_y_B|6_afrontamiento|TRUE|
+## |A_y_B|7_afrontamiento|TRUE|
+## |A_y_B|8_afrontamiento|TRUE|
+## |A_y_B|9_afrontamiento|FALSE|
+## |A_y_B|10_afrontamiento|FALSE|
 ## |A_y_B|11_afrontamiento|FALSE|
-## |A_y_B|8_afrontamiento|FALSE|
+## |A_y_B|12_afrontamiento|FALSE|
 ## |A_y_B|10_estres|FALSE|
 ## |A_y_B|14_estres|FALSE|
 ## |A_y_B|21_estres|FALSE|
@@ -699,30 +698,30 @@
 ## Cuando se ha aplicado formula de inversión cuando aplique, según la agrupación de preguntas en indicadores, se califica cada indicador, aplicando promedio ponderado de las respuestas con peso relativo al indicador. En tabla se detalla el peso a aplicar en la ponderación . Se debe aplicar la formula de manera discriminada a las preguntas que aplican en cada indicador tanto para A como para B, como las que aplican solo para A o solo para B. Cada trabajador obtiene un resultado en cada indicador acorde a esta calificacion ponderada##
 
 ## |forma_intra| id_pregunta|peso|indicador ##
-## A_y_B|9_afrontamiento|1|Actitud resiliente ##
-## A_y_B|12_capitalpsicologico|1|Activa red de apoyo ##
-## A_y_B|7_afrontamiento|1|Aprendizaje resiliente ##
-## A_y_B|10_afrontamiento|1|Autoeficacia percibida ##
-## A_y_B|5_capitalpsicologico|1|Autonegación ##
-## A_y_B|9_capitalpsicologico|1|Busqueda de Apoyo profesional ##
-## A_y_B|10_capitalpsicologico|1|Busqueda de consejo y orientación ##
-## A_y_B|11_capitalpsicologico|1|Busqueda de soporte emocional ##
-## A_y_B|5_afrontamiento|1|Convicción por las metas ##
-## A_y_B|1_capitalpsicologico|1|Dedicación ##
-## A_y_B|6_afrontamiento|1|Esfuerzo y dedicación ##
-## A_y_B|4_afrontamiento|1|Esperanza del futuro ##
-## A_y_B|7_capitalpsicologico|1|Evitación cognitiva ##
-## A_y_B|8_capitalpsicologico|1|Evitación conductual ##
-## A_y_B|1_afrontamiento|1|Firmeza y perseverancia ##
-## A_y_B|12_afrontamiento|1|Locus de control interno ##
-## A_y_B|2_afrontamiento|1|Optimismo del porvenir ##
-## A_y_B|2_capitalpsicologico|1|Orientación a la acción ##
-## A_y_B|4_capitalpsicologico|1|Planificación ##
-## A_y_B|3_capitalpsicologico|1|Propositividad ##
-## A_y_B|6_capitalpsicologico|1|Renuncia ##
-## A_y_B|3_afrontamiento|1|Resolutividad ##
-## A_y_B|11_afrontamiento|1|Sensación de logro ##
-## A_y_B|8_afrontamiento|1|Superación de adversidades ##
+## A_y_B|1_capitalpsicologico|1|Firmeza y perseverancia	##
+## A_y_B|2_capitalpsicologico|1|Optimismo del porvenir	##
+## A_y_B|3_capitalpsicologico|1|Resolutividad	##  
+## A_y_B|4_capitalpsicologico|1|Esperanza del futuro	##
+## A_y_B|5_capitalpsicologico|1|Convicción por las metas	##
+## A_y_B|6_capitalpsicologico|1|Esfuerzo y dedicación	##
+## A_y_B|7_capitalpsicologico|1|Aprendizaje resiliente	##
+## A_y_B|8_capitalpsicologico|1|Superación de adversidades	##
+## A_y_B|9_capitalpsicologico|1|Actitud resiliente	##
+## A_y_B|10_capitalpsicologico|1|Autoeficacia percibida	##
+## A_y_B|11_capitalpsicologico|1|Sensación de logro	##
+## A_y_B|12_capitalpsicologico|1|Locus de control interno	##
+## A_y_B|1_afrontamiento|1|Dedicación	##
+## A_y_B|2_afrontamiento|1|Orientación a la acción	##
+## A_y_B|3_afrontamiento|1|Propositividad	##
+## A_y_B|4_afrontamiento|1|Planificación	##
+## A_y_B|5_afrontamiento|1|Autonegación	##  
+## A_y_B|6_afrontamiento|1|Renuncia	##
+## A_y_B|7_afrontamiento|1|Evitación cognitiva	##
+## A_y_B|8_afrontamiento|1|Evitación conductual	##
+## A_y_B|9_afrontamiento|1|Busqueda de Apoyo profesional	##
+## A_y_B|10_afrontamiento|1|Busqueda de consejo y orientación	##
+## A_y_B|11_afrontamiento|1|Busqueda de soporte emocional	##
+## A_y_B|12_afrontamiento|1|Activa red de apoyo	##
 ## A_y_B|10_estres|0.35|Alteraciones cognitivas ##
 ## A_y_B|14_estres|0.45|Alteraciones cognitivas ##
 ## A_y_B|21_estres|0.2|Alteraciones cognitivas ##
