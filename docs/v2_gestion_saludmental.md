@@ -880,10 +880,10 @@
 ## B|20_intra|0.34|Atención y concentración sostenida ##
 ## B|34_intra|0.1|Autogestión del volumen y ritmo ##
 ## B|35_intra|0.6|Autogestión del volumen y ritmo ##
-## B|36_intra|0.2|Autogestión del volumen y ritmo ##
+## B|36_intra|0.3|Autogestión del volumen y ritmo ##
 ## A|44_intra|0.1|Autogestión del volumen y ritmo ##
 ## A|45_intra|0.6|Autogestión del volumen y ritmo ##
-## A|46_intra|0.2|Autogestión del volumen y ritmo ##
+## A|46_intra|0.3|Autogestión del volumen y ritmo ##
 ## A|18_intra|1|Carga de memoria ##
 ## B|18_intra|0.7|Carga de memoria ##
 ## B|19_intra|0.3|Carga de memoria ##
@@ -955,10 +955,10 @@
 ## A|82_intra|0.2|Cohesión y sentido de pertenencia ##
 ## A|83_intra|0.2|Cohesión y sentido de pertenencia ##
 ## A|84_intra|0.2|Cohesión y sentido de pertenencia ##
-## B|63_intra|0.33|Convivencia y respeto ##
+## B|63_intra|0.30|Convivencia y respeto ##
 ## B|66_intra|0.6|Convivencia y respeto ##
 ## B|67_intra|0.1|Convivencia y respeto ##
-## A|77_intra|0.33|Convivencia y respeto ##
+## A|77_intra|0.30|Convivencia y respeto ##
 ## A|80_intra|0.6|Convivencia y respeto ##
 ## A|81_intra|0.1|Convivencia y respeto ##
 ## B|56_intra|0.05|Apoyo social y seguridad psicológica ##
@@ -1008,153 +1008,15 @@
 ## A|69_intra|0.1|Soporte instrumental y facilitación de la tarea ##
 ## A|72_intra|0.3|Soporte instrumental y facilitación de la tarea ##
 
-## En tabla se detalla el denominador de cada indicador (total de preguntas del indicador). Cada trabajador obtiene un resultado en cada indicador segun la formulacion descrita ##
-## |forma_intra| indicador|denominador_al_indicador
-## A_y_B|Actitud resiliente|1
-## A_y_B|Activa red de apoyo|1
-## A_y_B|Aprendizaje resiliente|1
-## A_y_B|Autoeficacia percibida|1
-## A_y_B|Autonegación|1
-## A_y_B|Busqueda de Apoyo profesional|1
-## A_y_B|Busqueda de consejo y orientación|1
-## A_y_B|Busqueda de soporte emocional|1
-## A_y_B|Convicción por las metas|1
-## A_y_B|Dedicación|1
-## A_y_B|Esfuerzo y dedicación|1
-## A_y_B|Esperanza del futuro|1
-## A_y_B|Evitación cognitiva|1
-## A_y_B|Evitación conductual|1
-## A_y_B|Firmeza y perseverancia|1
-## A_y_B|Locus de control interno|1
-## A_y_B|Optimismo del porvenir|1
-## A_y_B|Orientación a la acción|1
-## A_y_B|Planificación|1
-## A_y_B|Propositividad|1
-## A_y_B|Renuncia|1
-## A_y_B|Resolutividad|1
-## A_y_B|Sensación de logro|1
-## A_y_B|Superación de adversidades|1
-## A_y_B|Alteraciones cognitivas|3
-## A_y_B|Desgaste emocional|5
-## A_y_B|Pérdida de sentido|3
-## A_y_B|Accesibilidad del entorno|3
-## A_y_B|Apoyo social|5
-## A_y_B|Condiciones de la vivienda|4
-## A_y_B|Dererioro de relaciones sociales y aislamiento|2
-## A_y_B|Movilidad eficiente y desplazamiento saludable|4
-## A_y_B|Relación con el núcleo familiar|3
-## A_y_B|Seguridad del entorno|2
-## A_y_B|Bienestar financiero|3
-## A_y_B|Somatización y fatiga física|8
-## A_y_B|Conflicto vida - trabajo|3
-## A_y_B|Equilibrio y recuperación|4
-## B|Impacto cognitivo-relacional|2
-## A|Impacto cognitivo-relacional|2
-## B|Interferencia temporal|2
-## A|Interferencia temporal|2
-## A_y_B|Desmotivación y desgaste laboral|6
-## A_y_B|Conductas de riesgo|4
-## B|Autonomía decisional|1
-## A|Autonomía decisional|1
-## B|Claridad en funciones y objetivos del rol|3
-## A|Claridad en funciones y objetivos del rol|3
-## A|Decisiones críticas y resultados de gestión|2
-## A|Integridad normativa|1
-## A|Pertinencia operativa|2
-## B|Propósito del rol y redes de soporte|1
-## A|Propósito del rol y redes de soporte|3
-## A|Responsabilidad por bienes y valores|2
-## A|Responsabilidad por la integridad y salud de otros|2
-## A|Contradicción en estructura de mando|1
-## B|Acceso a capacitación|1
-## A|Acceso a capacitación|1
-## B|Alineación de competencias y ajuste al cargo|1
-## A|Alineación de competencias y ajuste al cargo|2
-## B|Rol enriquecido|3
-## A|Rol enriquecido|2
-## B|Pertinencia y aplicabilidad de la capacitación|2
-## A|Pertinencia y aplicabilidad de la capacitación|2
-## A|Disonancia emocional|2
-## B|Disonancia emocional|2
-## A|Exposición al sufrimiento|5
-## B|Exposición al sufrimiento|5
-## A|Hostilidad y violencia|3
-## B|Hostilidad y violencia|3
-## A|Confort del entorno|6
-## B|Confort del entorno|6
-## A|Orden percibido|1
-## B|Orden percibido|1
-## B|Riesgos biomecánicos|2
-## A|Riesgos biomecánicos|2
-## A|Riesgos higiénicos|2
-## B|Riesgos higiénicos|2
-## A|Seguridad percibida|1
-## B|Seguridad percibida|1
-## A|Atención y concentración sostenida|3
-## B|Atención y concentración sostenida|3
-## B|Autogestión del volumen y ritmo|3
-## A|Autogestión del volumen y ritmo|3
-## A|Carga de memoria|1
-## B|Carga de memoria|2
-## B|Ritmo de trabajo|3
-## A|Ritmo de trabajo|3
-## A|Simultaneidad|1
-## A|Volumen de trabajo|3
-## B|Volumen de trabajo|3
-## B|Descansos programados|2
-## A|Descansos programados|2
-## B|Trabajo nocturno|1
-## A|Trabajo nocturno|1
-## B|Claridad e impacto del cambio|1
-## A|Claridad e impacto del cambio|3
-## B|Participación en los cambios|2
-## A|Participación en los cambios|2
-## B|Cumplimiento en retribución|2
-## A|Cumplimiento en retribución|2
-## A|Desarrollo y movilidad interna|2
-## B|Desarrollo y movilidad interna|2
-## A|Estabilidad y confianza|2
-## B|Estabilidad y confianza|1
-## B|Expectativa en la retribución|1
-## A|Expectativa en la retribución|1
-## A|Orgullo de pertenencia|3
-## B|Orgullo de pertenencia|3
-## A|Valoración del bienestar|1
-## B|Valoración del bienestar|1
-## B|Apoyo emocional|2
-## A|Apoyo emocional|2
-## B|Apoyo social e instrumental|4
-## A|Apoyo social e instrumental|4
-## B|Cohesión y sentido de pertenencia|3
-## A|Cohesión y sentido de pertenencia|5
-## B|Convivencia y respeto|3
-## A|Convivencia y respeto|3
-## B|Apoyo social y seguridad psicológica|5
-## A|Apoyo social y seguridad psicológica|4
-## B|Calidad y utilidad de la retroalimentación|2
-## A|Calidad y utilidad de la retroalimentación|2
-## B|Claridad operativa y flujo de información|1
-## A|Claridad operativa y flujo de información|2
-## A|Estresores para los lideres en su gestión de equipos|10
-## B|Desarrollo, participación e inspiración|3
-## A|Desarrollo, participación e inspiración|3
-## B|Reconocimiento y refuerzo positivo|1
-## A|Reconocimiento y refuerzo positivo|1
-## B|Retroalimentación correctiva oportuna|2
-## A|Retroalimentación correctiva oportuna|2
-## B|Soporte instrumental y facilitación de la tarea|4
-## A|Soporte instrumental y facilitación de la tarea|4
-
-
 ## 3.2 Calificar indicadores en líneas de gestion con pesos relativos ##
 ## Antes de calificar la línea de gestion, se invierte el sentido del indicador cuando aplique (escala 0 a 1) con formula (1 – valor). Se detalla cuando aplica esta inversión con true, false. Se debe aplicar la fórmula de invertir de manera discriminada a las preguntas que aplican en cada indicador tanto para A como para B, como las que aplican solo para A o solo para B. Cuando se ha aplicado formula de inversión al indicador cuando aplique, según la agrupación de indicadores a líneas de gestión, se califica cada línea de gestion, aplicando promedio ponderado de los indicadores con peso relativo a la línea de gestion. En tabla se detalla el peso a aplicar en la ponderación. Se debe aplicar la formula de manera discriminada a los indicadores que aplican en linea tanto para A como para B, como las que aplican solo para A o solo para B. Cada trabajador obtiene un resultado en cada linea de gestion acorde a esta calificacion ponderada##
 
 ## |forma_intra| indicador| invertir_indicador|peso|linea_gestion|prioridad|##
 ## AyB|Autoeficacia percibida|FALSE|0.08|Afrontamiento del estrés y recursos psicológicos|Alta ##        
 ## AyB|Locus de control interno|FALSE|0.08|Afrontamiento del estrés y recursos psicológicos|Alta ##
-## AyB|Evitación conductual|FALSE|0.06|Afrontamiento del estrés y recursos psicológicos|Alta ##
+## AyB|Evitación conductual|TRUE|0.06|Afrontamiento del estrés y recursos psicológicos|Alta ##
 ## AyB|Actitud resiliente|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Alta ##
-## AyB|Autonegación|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Alta ##
+## AyB|Autonegación|TRUE|0.05|Afrontamiento del estrés y recursos psicológicos|Alta ##
 ## AyB|Convicción por las metas|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
 ## AyB|Dedicación|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
 ## AyB|Esfuerzo y dedicación|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
@@ -1162,7 +1024,7 @@
 ## AyB|Firmeza y perseverancia|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
 ## AyB|Orientación a la acción|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
 ## AyB|Planificación|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
-## AyB|Renuncia|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
+## AyB|Renuncia|TRUE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
 ## AyB|Resolutividad|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
 ## AyB|Superación de adversidades|FALSE|0.05|Afrontamiento del estrés y recursos psicológicos|Media ##
 ## AyB|Activa red de apoyo|FALSE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
@@ -1170,7 +1032,7 @@
 ## AyB|Busqueda de Apoyo profesional|FALSE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
 ## AyB|Busqueda de consejo y orientación|FALSE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
 ## AyB|Busqueda de soporte emocional|FALSE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
-## AyB|Evitación cognitiva|FALSE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
+## AyB|Evitación cognitiva|TRUE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
 ## AyB|Optimismo del porvenir|FALSE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
 ## AyB|Propositividad|FALSE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
 ## AyB|Sensación de logro|FALSE|0.02|Afrontamiento del estrés y recursos psicológicos|Baja ##
@@ -1180,7 +1042,7 @@
 ## AyB|Bienestar financiero|FALSE|1|Bienestar financiero|Alta ##
 ## AyB|Somatización y fatiga física|TRUE|1|Bienestar físico|Alta ##
 ## AyB|Apoyo social|FALSE|0.4|Bienestar extralaboral|Alta ##
-## AyB|Dererioro de relaciones sociales y aislamiento|FALSE|0.2|Bienestar extralaboral|Alta ##
+## AyB|Dererioro de relaciones sociales y aislamiento|TRUE|0.2|Bienestar extralaboral|Alta ##
 ## AyB|Relación con el núcleo familiar|FALSE|0.2|Bienestar extralaboral|Media ##
 ## AyB|Accesibilidad del entorno|FALSE|0.05|Bienestar extralaboral|Baja ##
 ## AyB|Condiciones de la vivienda|FALSE|0.05|Bienestar extralaboral|Baja ##
@@ -1228,7 +1090,7 @@
 ## A|Autogestión del volumen y ritmo|FALSE|0.1|Cargas de trabajo saludables|Baja ##
 ## A|Carga de memoria|TRUE|0.05|Cargas de trabajo saludables|Baja ##
 ## AyB|Trabajo nocturno|TRUE|0.7|Jornadas de trabajo saludables|Alta ##
-## AyB|Descansos programados|TRUE|0.3|Jornadas de trabajo saludables|Media ##
+## AyB|Descansos programados|FALSE|0.3|Jornadas de trabajo saludables|Media ##
 ## AyB|Claridad e impacto del cambio|FALSE|0.3|Cambio organizacional|Baja ##
 ## AyB|Participación en los cambios|FALSE|0.7|Cambio organizacional|Baja ##
 ## AyB|Orgullo de pertenencia|FALSE|0.4|Engagement organizacional|Alta ##
@@ -1257,33 +1119,6 @@
 ## A|Reconocimiento y refuerzo positivo|FALSE|0.05|Ecosistema de liderazgo con impacto psicosocial|Baja ##
 ## A|Retroalimentación correctiva oportuna|FALSE|0.05|Ecosistema de liderazgo con impacto psicosocial|Baja ##
 
-## En tabla se detalla el denominador de cada línea de gestion (total de indicadores de la línea de gestion). Cada trabajador obtiene un resultado en cada linea de gestion acorde a esta calificacion ponderada  ##
-
-## forma_intra| denominador_a_lineadegestion|linea_gestion
-## AyB|Afrontamiento del estrés y recursos psicológicos|24
-## AyB|Bienestar cognitivo|1
-## AyB|Bienestar emocional y trascendente|2
-## AyB|Bienestar financiero|1
-## AyB|Bienestar físico|1
-## AyB|Bienestar extralaboral|7
-## AyB|Motivación laboral|1
-## AyB|Bienestar vida-trabajo|4
-## AyB|Comportamientos seguros|1
-## B|Arquitectura de roles y responsabilidades|3
-## A|Arquitectura de roles y responsabilidades|9
-## AyB|Aprendizaje y desarrollo (L&D Strategy)|4
-## AyB|Condiciones emocionales saludables|3
-## AyB|Condiciones físicas saludables|5
-## B|Cargas de trabajo saludables|5
-## A|Cargas de trabajo saludables|6
-## AyB|Jornadas de trabajo saludables|2
-## AyB|Cambio organizacional|2
-## AyB|Engagement organizacional|6
-## AyB|Convivencia y relacionamiento|4
-## B|Ecosistema de liderazgo con impacto psicosocial|7
-## A|Ecosistema de liderazgo con impacto psicosocial|8
-
-
 ## 3.3 Calificar ejes de gestión con pesos relativos ##
 ## En este caso, no debe invertirse el sentido, se califica según la agrupación de líneas de gestión en ejes, se califica cada eje, aplicando promedio ponderado de las líneas de gestión con peso relativo al eje. En la tabla se detalla el peso a aplicar en la ponderación. Cada trabajador obtiene resultado de cada eje de gestion segun calificacion descrita##
 
@@ -1307,14 +1142,6 @@
 ## Engagement organizacional|0.1|Condiciones de trabajo saludable|Media
 ## Convivencia y relacionamiento|0.4|Entorno y clima de trabajo saludable|Alta
 ## Ecosistema de liderazgo con impacto psicosocial|0.6|Entorno y clima de trabajo saludable|Alta
-
-
-## En tabla se detalla el denominador de cada eje de gestion (total de líneas de gestión de cada eje)  ##
-
-## |eje_gestion| denominador_a_eje_gestion##
-## Bienestar biopsicosocial|9
-## Condiciones de trabajo saludable|8
-## Entorno y clima de trabajo saludable|2
 
 ## Paso 4.Calificar según puntos de corte los ejes y lineas de gestión, generando una interpretación categorica del nivel## 
 ## 4.1 Se califica los ejes y lineas de gestion, generando los puntajes que salen del paso anterior e interpretandolos con las siguientes tablas. Se deben crear los rangos aplicando los puntos de corte y estableciendo los 5 niveles de de gestion.Notese que la escala viene de mayor a menor, a menor resultado intervencion mas critica. Cada trabajador obtiene puntaje transformado e interpretacion del nivel de gestion en cada eje e indicador##
@@ -1394,4 +1221,20 @@
 ## | Transporte | PROT-16, PROT-08, PROT-14, PROT-09 |##
 ## | Minas/Energía | PROT-08, PROT-14, PROT-10, PROT-05 |##
 ## | Agricultura | PROT-08, PROT-06, PROT-07, PROT-16 |##
+
+## Paso 6: Se debe generar un insumo para el programa de vigilancia epidemiológica, el cual hace un consolidado por cada uno de los 11 indicadores priorizados para vigilancia epidemiológica, el total de trabajadores que cumplen con el criterio de caso sospechoso. Identifica el listado de trabajadores que cumplen algun criterio, especificando cual criterio de caso sospechoso cumplen. Este analisis busca en fact_tables instrumentos intralaboral a y b, estres, extralaboral y en dimensional_tables: ausentismo_12 meses. Se hace un conteo de cuantos criterios de casos sospechoso cumple cada trabajador, se ordenan los trabajadores de mayor numero de criterios a menor. La siguiente tabla especifica los indicadores y criterios. El sistema debe mostrar esta misma tabla resumen con: Fuente de información, Indicador,Definición de caso probable,	Criterio caso sospechoso, # de trabajadores que cumplen el criterio de caso sospechoso,	Criterio caso confirmado, Mecanismo de confirmación,	Soporte legal,	Enfoque. Además de la tabla resumen, el sistema identifica todos los trabajadores especificando cuales criterios de caso sospechoso cumplen y ordenando de mayor a menor los trabajadores con cumplimiento de más # de indicadores ##
+
+## | Fuentes de información	Indicador|	Definición de caso probable|	Criterio caso sospechoso|	Criterio caso confirmado|	Mecanismo de confirmación|	Soporte legal|	Enfoque |##
+
+# intralaboral A_o_B|	Convivencia y respeto|	Trabajadores con autoreporte de exposición a conductas de maltrato o irrespeto en el entorno laboral|	Score<=0.45|	Trabajadores con queja de acoso laboral en comité de convivencia laboral|	Reportes oficiales al CCL|	Res.2764/2022/Ley 1010/2006	|Cuidado de la salud ## 
+## estres|	Conductas de riesgo|	Trabajadores con autoreporte de comportamientos de riesgo como consumo de drogas, bebidas, accidentes|	Score>=0.45|	Trabajadores con consumo problemático de alcohol  y sustancias psicoactivas|	Pruebas biológicas + pruebas de patrón de consumo|	Res.2764/2022/Res/1968 de 2025/Dec 728/2025+Res/PESV|	Cuidado de la salud ##
+## ausentismo|	Tipo de ausentismo-Accidente de trabajo|	Trabajadores con registro de accidentalidad laboral en los últimos 12 meses|	> 1 evento de accidente laboral en tipo de ausentismo|	Trabajadores que han presentado accidentes de trabajo multiples, más de 2 accidentes en 12 meses|	Furat, formatos investigación, reportes|	Res.2764/2022|	Cuidado de la salud ##
+## ausentismo|	Trabajadores con reportes de ausentismo de interés psicosocial|	Trabajadores que en los ultimos 12 meses han presentado al menos 1 evento de ausentismo de interés psicosocial|	1 o más eventos de ausentismo laboral de interés psicosocial diagnostico CIE|	Trabajadores que han presentado diagnósticos de interés relacionados con riesgo psicosocial en los ultimos 12 meses|	Registros de ausentismo laboral|	Res.2764/2022|	Cuidado de la salud ##
+## estres|	Somatización y fatiga física|	Trabajadores con autoreporte de sintomas físicos asociados al estrés|	Score>=0.45|	Trabajadores que están atravezando un evento vital estresante o alta exposición a factores de riesgo psicosocial laboral|	Valoración psicosocial individual|	Res.2764/2022/Res. 2646/2008|	Cuidado de la salud ##
+## estres|	Desgaste emocional|	Trabajadores con autoreporte de sintomas emocionales asociados al estrés|	Score>=0.45|	Trabajadores que están atravezando un evento vital estresante o alta exposición a factores de riesgo psicosocial laboral|	Valoración psicosocial individual|	Res.2764/2022/Res. 2646/2008|	Cuidado de la salud ##
+## estres|	Desmotivación y desgaste laboral|	Trabajadores con autoreporte de desmotivación laboral, desgaste e intención de rotación|	Score>=0.45|	Sin requisito legal directo|	Valoración psicosocial individual|	Sin requisito legal directo|	Promoción del bienestar ##
+## estres|	Pérdida de sentido|	Trabajadores con autoreporte de perdida de sentido  de vida|	Score>=0.45|	Sin requisito legal directo|	Valoración psicosocial individual|	Sin requisito legal directo|	Promoción del bienestar ##
+## intralaboral A_o_B|	Interferencia temporal|	Trabajadores con autoreporte de alto conflicto del trabajo con la vida personal por interferencia de tiempo|	Score>=0.45|	Sin requisito legal directo	Valoración psicosocial individual|	Sin requisito legal directo|	Promoción del bienestar##
+## extralaboral|	Bienestar financiero|	Trabajadores con autoreporte de estresores financieros y alto endeudamiento|	Score<=0.45|	Sin requisito legal directo|	Valoración psicosocial individual|	Sin requisito legal directo|	Promoción del bienestar
+## extralaboral|Apoyo social|	Trabajadores con autoreporte de baja calidad en red de apoyo social	|Score<=0.45|	Sin requisito legal directo	|Valoración psicosocial individual|Sin requisito legal directo	|Promoción del bienestar## 
 

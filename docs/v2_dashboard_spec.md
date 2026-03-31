@@ -27,9 +27,19 @@
 
 | Archivo | Contenido | Columnas clave |
 |---------|-----------|---------------|
-| `fact_gestion_scores.parquet` | Score ponderado por trabajador x indicador/linea/eje | cedula, forma_intra, empresa, nivel_calculo (indicador, linea, eje), nombre_nivel, score_ponderado |
-| `fact_gestion_categorias.parquet` | Score + nivel de gestion asignado | cedula, forma_intra, empresa, nivel_calculo, nombre_nivel, score, nivel_gestion, etiqueta_gestion, enfoque_gestion |
-| `fact_prioridades_protocolos.parquet` | Ranking de protocolos a implementar | empresa, protocolo_id, protocolo_nombre, linea_gestion, eje_gestion, pct_intervencion, exigencia_legal_sector, ranking |
+| `fact_gestion_indicadores.parquet` | Score ponderado por trabajador x indicador | cedula, nombre_trabajador, empresa, sector_economico, forma_intra, indicador, linea_gestion, eje_gestion, score_indicador, score_ind_inv |
+| `fact_gestion_lineas.parquet` | Score ponderado por trabajador x linea de gestion | cedula, empresa, linea_gestion, eje_gestion, score_linea |
+| `fact_gestion_ejes.parquet` | Score ponderado por trabajador x eje de gestion | cedula, empresa, eje_gestion, score_eje |
+| `fact_gestion_04_niveles_indicadores.parquet` | Score + nivel de gestion por indicador | cedula, empresa, indicador, score_ind_inv, nivel_gestion, etiqueta_gestion, orden_nivel |
+| `fact_gestion_04_niveles_lineas.parquet` | Score + nivel de gestion por linea | cedula, empresa, linea_gestion, score_linea, nivel_gestion, orden_nivel |
+| `fact_gestion_04_niveles_ejes.parquet` | Score + nivel de gestion por eje | cedula, empresa, eje_gestion, score_eje, nivel_gestion, orden_nivel |
+| `fact_gestion_04_resumen_empresa_ejes.parquet` | Resumen empresa x eje: score stats + % por nivel | empresa, eje_gestion, n_trabajadores, score_mean, nivel_predominante |
+| `fact_gestion_04_resumen_empresa_lineas.parquet` | Resumen empresa x linea: score stats + % por nivel | empresa, linea_gestion, n_trabajadores, score_mean, nivel_predominante |
+| `dim_protocolos_lineas.parquet` | Tabla de relacion linea <-> protocolo con metadatos | linea_gestion, protocolo_id, protocolo_nombre, objetivo, resultado_esperado |
+| `fact_gestion_05_prioridades_protocolos.parquet` | Ranking de protocolos por empresa: urgencia + sector | empresa, protocolo_id, protocolo_nombre, pct_critico_max, rango_sector, score_prioridad, rango_empresa, es_prioritario_sector |
+| `fact_gestion_06_vigilancia_resumen.parquet` | Resumen VEP: empresa x indicador con n_casos y % | empresa, vig_id, indicador, fuente, n_total, n_casos, pct_casos, soporte_legal, enfoque |
+| `fact_gestion_06_vigilancia_trabajadores.parquet` | Listado nominativo: trabajador x criterios cumplidos | cedula, nombre_trabajador, empresa, area_departamento, categoria_cargo, criterios_cumplidos, n_criterios |
+| `fact_gestion_06_vigilancia_ranking.parquet` | Ranking de trabajadores por n_criterios DESC | empresa, cedula, nombre_trabajador, n_criterios, criterios_cumplidos |
 
 ### Parquets reutilizados del V1
 
@@ -201,6 +211,43 @@
 | Score B por eje | Promedio score trabajadores forma B en cada eje | `fact_gestion_categorias` filtrado forma_intra=B |
 | Delta | Score B - Score A | Calculado |
 
+#### KPI-G7: Vigilancia Epidemiologica
+
+```
++--------------------------------------------+
+|  VIGILANCIA EPIDEMIOLOGICA (PVE)           |
+|  ----------------------------------------- |
+|  Trabajadores con 1+ criterio: N  (X%)     |
+|  ================================           |
+|  Criterios mas frecuentes:                 |
+|  [rojo]  VIG-10 Bienestar financiero  28%  |
+|  [rojo]  VIG-09 Interferencia temps.  22%  |
+|  [naranja] VIG-01 Convivencia         15%  |
+|                                            |
+|  [!] N trabajadores con 3+ criterios       |
++--------------------------------------------+
+```
+
+| Dato | Calculo | Fuente |
+|------|---------|--------|
+| N con 1+ criterio | Conteo de trabajadores con n_criterios >= 1 | `fact_gestion_06_vigilancia_ranking` |
+| % con 1+ criterio | N/total_trabajadores * 100 | Calculado |
+| Top 3 criterios | Los 3 VIG-ID con mayor pct_casos | `fact_gestion_06_vigilancia_resumen` |
+| N con 3+ criterios | Conteo n_criterios >= 3 | `fact_gestion_06_vigilancia_ranking` |
+
+**Semaforo KPI-G7:**
+
+| Umbral | Color | Accion sugerida |
+|--------|-------|-----------------|
+| < 5% | Verde | Monitoreo regular |
+| 5 - 14.9% | Amarillo | Revision periodica |
+| 15 - 29.9% | Naranja | Activar valoraciones individuales |
+| >= 30% | Rojo | Activar PVE urgente |
+
+**Badge alerta:** Si algun trabajador cumple >= 3 criterios -> mostrar conteo destacado en rojo.
+
+---
+
 ### S3 — Vista global por ejes
 
 **Componente 1: 3 Gauges o Donuts (uno por eje)**
@@ -304,6 +351,64 @@
 **Narrativa S8:**
 > "El protocolo [nombre] tiene como objetivo [objetivo]. Actualmente, [N] trabajadores ([X]%) se encuentran en nivel de intervencion. La implementacion de este protocolo busca mejorar el indicador [KPI] desde su linea base actual de [score]."
 
+### S9 — Vigilancia Epidemiologica (PVE)
+
+**Proposito:** Identificar trabajadores que cumplen criterios de caso sospechoso para el Programa de Vigilancia Epidemiologica Psicosocial.
+
+#### Componente 1: Tabla resumen VEP (11 indicadores)
+
+| Columna | Contenido |
+|---------|-----------|
+| VIG-ID | Identificador del indicador (VIG-01 a VIG-11) |
+| Indicador | Nombre del indicador de vigilancia |
+| Fuente | Instrumento de origen (intralaboral, estres, extralaboral, ausentismo) |
+| Definicion | Descripcion del caso probable |
+| N casos | Numero de trabajadores que cumplen el criterio sospechoso |
+| % casos | Porcentaje sobre total evaluados |
+| Semaforo | Verde/Amarillo/Naranja/Rojo segun umbrales |
+| Enfoque | Cuidado de la salud / Promocion del bienestar |
+| Soporte legal | Normativa aplicable |
+
+- Fuente: `fact_gestion_06_vigilancia_resumen`
+- R8 Confidencialidad: si n_total < 5 para algun grupo -> no mostrar dato individual
+
+**Grafico de barras horizontales:** % casos por indicador, coloreado por enfoque (azul = cuidado salud, verde = promocion bienestar).
+
+#### Componente 2: Listado nominativo
+
+Tabla paginada y filtrable de trabajadores con criterios cumplidos.
+
+| Columna | Contenido |
+|---------|-----------|
+| Cedula | Identificador del trabajador (visible solo con permiso) |
+| Nombre | Nombre completo |
+| Area | Area/departamento |
+| Cargo | Categoria de cargo |
+| Criterios cumplidos | Lista de VIG-IDs (ej. VIG-01\|VIG-06\|VIG-10) |
+| N criterios | Numero total de criterios cumplidos |
+
+- Ordenado por n_criterios DESC (mayor urgencia primero)
+- Fuente: `fact_gestion_06_vigilancia_trabajadores`
+- **R8:** Solo visible para roles con permiso (RR.HH., medico laboral); en vistas publicas mostrar unicamente conteos anonimizados
+
+#### Narrativa S9
+
+> "El [X]% de los trabajadores cumple al menos un criterio de caso sospechoso de vigilancia epidemiologica. Los indicadores con mayor prevalencia son [top 3]. Se identificaron [N] trabajadores con 3 o mas criterios simultaneos, quienes requieren valoracion psicosocial individual prioritaria."
+
+**Transicion S8 -> S9:**
+> "Ademas del plan de accion por protocolos, el modelo identifica trabajadores con criterios de vigilancia epidemiologica que requieren atencion individualizada..."
+
+**Llamado a accion:**
+> "Los [N] trabajadores listados deben ser priorizados para: (1) valoracion psicosocial individual, (2) derivacion al medico laboral si criterios VIG-03/VIG-04, (3) reporte al comite de convivencia si criterio VIG-01."
+
+**Audiencias diferenciadas:**
+
+| Audiencia | Indicadores clave | Accion |
+|-----------|-----------------|--------|
+| RR.HH. | Todos - seguimiento y gestion | Listado nominativo completo |
+| Medico laboral | VIG-03, VIG-04, multi-criterio (>=3) | Derivacion a valoracion medica |
+| Comite de convivencia | VIG-01 (Convivencia y respeto) | Apertura de caso CCL si reiterado |
+
 ---
 
 ## 4. Narrativa y storytelling
@@ -332,10 +437,14 @@
    "Los protocolos prioritarios para [Empresa] (sector [X]) son..."
    -> Ranking + fichas por protocolo
 
-6. LLAMADO A LA ACCION
-   "Se recomienda activar [PROT-XX] y [PROT-YY] en los proximos
-    6 meses, priorizando [area] donde X trabajadores presentan
-    nivel de intervencion urgente."
+6. VIGILANCIA EPIDEMIOLOGICA (S9)
+   "Ademas del plan organizacional, se identificaron [N] trabajadores
+    con criterios de caso sospechoso que requieren atencion individual."
+   -> Tabla VEP + listado nominativo (R8)
+
+7. LLAMADO A LA ACCION INTEGRADO
+   "Implementar [PROT-XX] para la organizacion + derivar [N] trabajadores
+    con >=3 criterios para valoracion psicosocial individual."
 ```
 
 ### Transiciones entre secciones
@@ -348,6 +457,7 @@
 | S5 -> S6 | "Al cruzar estos indicadores con las areas de la empresa, se identifican los grupos poblacionales prioritarios..." |
 | S6 -> S7 | "Con base en estos resultados y la exigencia regulatoria del sector, los protocolos a activar son..." |
 | S7 -> S8 | "Cada protocolo tiene un KPI de linea base medible que permitira monitorear la efectividad de la intervencion..." |
+| S8 -> S9 | "Ademas del plan organizacional por protocolos, el modelo identifica trabajadores con criterios de vigilancia epidemiologica que requieren atencion individualizada..." |
 
 ### Interpretaciones por nivel de gestion
 
@@ -391,11 +501,14 @@ Font: Inter, Arial, sans-serif
 
 ## 7. Reglas de negocio
 
-- **R8 Confidencialidad:** Grupos < 5 personas = "Confidencial". Aplica a S6 (heatmap area x indicador) y cualquier segmentacion.
+- **R8 Confidencialidad:** Grupos < 5 personas = "Confidencial". Aplica a S6 (heatmap area x indicador) y S9 (listado nominativo — solo visible con rol autorizado).
 - **Semaforo KPI-G1:** Verde (>0.79), Amarillo (0.45-0.79), Rojo (<=0.45).
+- **Semaforo KPI-G7:** Verde (<5%), Amarillo (5-14.9%), Naranja (15-29.9%), Rojo (>=30%).
 - **Alerta intervencion:** Si % correctiva+urgente > 20% del total de trabajadores -> alerta roja.
+- **Alerta VEP multi-criterio:** Si algun trabajador cumple >= 3 criterios -> badge rojo con conteo en KPI-G7.
 - **Exigencia legal:** Los protocolos prioritarios por sector se marcan con icono de balanza/ley.
 - **Forma A vs B:** El dashboard debe permitir ver resultados globales (A+B) y discriminados.
+- **Ausentismo opcional:** VIG-03 y VIG-04 requieren ausentismo_12meses.parquet. Si no existe, marcar como "Sin datos" en S9.
 
 ---
 
@@ -406,7 +519,7 @@ Font: Inter, Arial, sans-serif
 [Filtros S1]
 --------------------------------------------------
 [KPI-G1]  [KPI-G2]  [KPI-G3]                 <- S2
-[KPI-G4]  [KPI-G5]  [KPI-G6]                 <- S2
+[KPI-G4]  [KPI-G5]  [KPI-G6]  [KPI-G7]      <- S2
 --------------------------------------------------
 [Gauges 3 ejes]  [Barras apiladas niveles]    <- S3
 --------------------------------------------------
@@ -419,6 +532,9 @@ Font: Inter, Arial, sans-serif
 [Ranking protocolos]                            <- S7
 --------------------------------------------------
 [Ficha protocolo seleccionado]                  <- S8
+--------------------------------------------------
+[Tabla resumen VEP 11 indicadores]             <- S9
+[Listado nominativo trabajadores (R8)]         <- S9
 ```
 
 Lienzo de desplazamiento vertical. Minimo 3000 x 2000 px. Diseno responsivo.

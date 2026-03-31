@@ -566,8 +566,10 @@ def main() -> None:
     df_sp2 = pd.read_parquet(out2_path)
 
     # ── 3.1 Preguntas → Indicadores ──────────────────────────────────────────
-    # score_indicador = suma_ponderada(valor_01_inv × peso_pregunta) / denom_indicador
-    # Denom de la tabla; si faltan preguntas (instrumento ausente) → NaN natural
+    # score_indicador = Σ(valor_01_inv × peso_pregunta)
+    # Los pesos por pregunta dentro de cada indicador suman 1.0,
+    # por lo que la suma ponderada ya queda expresada en escala 0-1.
+    # NO se divide por denominador (haría eso incorrectamente).
     df_num = df_sp2.copy()
     df_num["wv"] = df_num["valor_01_inv"] * df_num["peso_pregunta"]
 
@@ -578,15 +580,7 @@ def main() -> None:
         .agg(suma_wv=("wv", "sum"), n_preguntas=("valor_01_inv", "count"))
         .reset_index()
     )
-    # Unir denominador de indicadores
-    denom_ind_exp = _expandir_forma(tablas["denom_ind"], "forma_cat")
-    scores_ind = scores_ind.merge(
-        denom_ind_exp[["forma_intra", "indicador", "denom_ind"]].drop_duplicates(),
-        on=["forma_intra", "indicador"], how="left",
-    )
-    # Usar denominador del doc; si no hay → usar n_preguntas reales
-    scores_ind["denom_ind"] = scores_ind["denom_ind"].fillna(scores_ind["n_preguntas"])
-    scores_ind["score_indicador"] = scores_ind["suma_wv"] / scores_ind["denom_ind"]
+    scores_ind["score_indicador"] = scores_ind["suma_wv"]
 
     nan_ind = scores_ind["score_indicador"].isna().sum()
     log.info("Indicadores calculados: %d filas | NaN: %d", len(scores_ind), nan_ind)
