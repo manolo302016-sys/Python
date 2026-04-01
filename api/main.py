@@ -27,8 +27,10 @@ def read_root():
     }
 
 from .routers import v1_riesgo
+from .routers import v3_gerencial_asis
 
 # Registrar routers
 app.include_router(v1_riesgo.router)
+app.include_router(v3_gerencial_asis.router)
 
-# Los routers v2_gestion, v3_gerencial, v4_asis se añadirán tras validación ETL.
+# Los routers v2_gestion y v4_asis se añadirán tras validación ETL.

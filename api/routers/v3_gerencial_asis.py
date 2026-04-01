@@ -187,23 +187,21 @@ def post_kpis_globales(filtros: FiltrosRequest):
     # Estructurar por kpi_grupo
     grupos = {}
     for grupo, sub in df.groupby("kpi_grupo"):
-        niveles = sub[["nivel", "n_nivel", "pct_nivel"]].to_dict("records")
+        niveles = sub[["nivel_label", "n_nivel", "pct_nivel"]].to_dict("records")
         pct_ama = float(sub["pct_alto_muy_alto"].iloc[0]) if "pct_alto_muy_alto" in sub.columns else 0.0
-        ref_sector = sub["pct_referente_sector"].iloc[0]
-        ref_pais = sub["pct_referente_pais"].iloc[0]
-        diff_sector = sub["diferencia_pp_sector"].iloc[0]
-        diff_pais = sub["diferencia_pp_pais"].iloc[0]
-        semaforo = str(sub["semaforo_color"].iloc[0])
+        pct_ref = sub["pct_referente"].iloc[0]
+        tipo_ref = str(sub["tipo_referente"].iloc[0]) if "tipo_referente" in sub.columns else "pais"
+        diff_pp = sub["diferencia_pp"].iloc[0]
+        semaforo = str(sub["semaforo"].iloc[0])
 
         grupos[grupo] = {
             "kpi_grupo": grupo,
             "niveles": niveles,
             "pct_alto_muy_alto": pct_ama,
-            "pct_referente_sector": None if pd.isna(ref_sector) else float(ref_sector),
-            "pct_referente_pais": None if pd.isna(ref_pais) else float(ref_pais),
-            "diferencia_pp_sector": None if pd.isna(diff_sector) else float(diff_sector),
-            "diferencia_pp_pais": None if pd.isna(diff_pais) else float(diff_pais),
-            "semaforo_color": semaforo,
+            "pct_referente": None if pd.isna(pct_ref) else float(pct_ref),
+            "tipo_referente": tipo_ref,
+            "diferencia_pp": None if pd.isna(diff_pp) else float(diff_pp),
+            "semaforo": semaforo,
         }
 
     # Generar insight narrativo por KPI
@@ -230,7 +228,7 @@ def _generar_insights_kpis_v3(grupos: dict) -> list:
 
     for grupo, datos in grupos.items():
         pct = datos.get("pct_alto_muy_alto", 0)
-        diff = datos.get("diferencia_pp_pais") or datos.get("diferencia_pp_sector")
+        diff = datos.get("diferencia_pp")
 
         umbral = umbrales_alerta.get(grupo, 35)
         if pct > umbral:
@@ -283,7 +281,7 @@ def post_demografia(filtros: FiltrosRequest):
         df.loc[df["confidencial"], ["n", "pct"]] = None
 
     resultado = {}
-    for var, sub in df.groupby("variable_demografica"):
+    for var, sub in df.groupby("variable"):
         registros = sub[["categoria", "n", "pct"]].copy()
         if "sexo" in sub.columns and sub["sexo"].notna().any():
             registros = sub[["categoria", "sexo", "n", "pct"]].copy()
@@ -341,9 +339,8 @@ def post_costos_ausentismo(filtros: FiltrosRequest):
 
     # ROI estimado: si inversión típica SST = 2% masa salarial
     cfg = _load_config()
-    eco = cfg.get("parametros_economicos", {})
     n_planta = meta.get("n_planta", 1)
-    smlv = eco.get("SMLV_mensual", 2_800_000)
+    smlv = cfg.get("smlv_mensual", 2_800_000)
     inversion_sst_estimada = n_planta * smlv * 12 * 0.02  # 2% masa salarial
 
     roi_pct = None
@@ -403,7 +400,7 @@ def post_benchmarking(filtros: FiltrosRequest):
             insights.append({
                 "tipo": "alerta",
                 "mensaje": (
-                    f"{row['instrumento']} supera el referente {row['fuente_referente']} "
+                    f"{row['instrumento']} supera el referente {row.get('tipo_referente', 'nacional')} "
                     f"en {diff:+.1f} puntos porcentuales (significativo)."
                 ),
             })
@@ -452,8 +449,8 @@ def post_ranking_areas(filtros: FiltrosRequest):
 
     resultado = top5[[
         "ranking", "area_departamento", "n_evaluados",
-        "pct_alto_muy_alto_intra", "nivel_predominante",
-        "dimension_critica", "semaforo_color"
+        "pct_ama", "nivel_predominante",
+        "dimension_critica", "semaforo"
     ]].to_dict("records")
 
     return {
@@ -495,8 +492,8 @@ def post_alertas_protocolos(filtros: FiltrosRequest):
         if "empresa" in prot_emp.columns else prot_emp.copy()
 
     cfg = _load_config()
-    sector_empresa = df_emp["sector_homologado"].iloc[0] \
-        if not df_emp.empty and "sector_homologado" in df_emp.columns else "No clasificado"
+    sector_empresa = df_emp["sector_economico"].iloc[0] \
+        if not df_emp.empty and "sector_economico" in df_emp.columns else "No clasificado"
 
     # Prioridades por sector desde config
     prios = cfg.get("prioridades_sector", {}).get(sector_empresa, [])
@@ -518,7 +515,7 @@ def post_alertas_protocolos(filtros: FiltrosRequest):
     fichas = []
     for _, row in top3_prot.iterrows():
         prot_id = str(row.get("protocolo_id", ""))
-        linea = str(row.get("linea", row.get("nombre_protocolo", prot_id)))
+        linea = str(row.get("protocolo_nombre", prot_id))
 
         # Buscar ficha en dim_protocolos_lineas
         ficha_dim = dim_prot[dim_prot["protocolo_id"] == prot_id] \

@@ -16,8 +16,9 @@
 | 06_benchmarking.py | V1-Paso16 · V1-Paso17 · V1-Paso18 · V1-Paso19 | fact_benchmark |
 | 07_frecuencias_preguntas.py | V1-Paso20 | fact_frecuencias |
 | 08_consolidacion.py | V1-Paso21 · V3-Paso1 (19 KPIs) | fact_consolidado + fact_kpis_gerenciales |
-| 09_costo_ausentismo.py | V4-Paso1 (fórmula 6 pasos) | fact_costo_ausentismo |
-| Endpoints FastAPI (A desarrollar) | Exposición de datos para renderizado en Frontend (Next.js) | JSON vía API |
+| 09_asis_gerencial.py | V3-Pasos 1-5 · V4-Paso1 (fórmula R10) | fact_v3_kpis_globales · fact_v3_demografia · fact_v3_costos · fact_v3_benchmarking · fact_v3_ranking_areas |
+| generar_auditoria_v3.py | Auditoría Excel V3 (consultel + indecol) | output/auditoria_v3_consultel_indecol.xlsx |
+| api/routers/v3_gerencial_asis.py | Endpoints FastAPI /v3 (7 endpoints) | JSON · 7 rutas S0-S5 |
 
 ---
 
